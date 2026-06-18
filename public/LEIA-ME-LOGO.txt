@@ -1,0 +1,26 @@
+LOGOMARCA — como usar a logo ORIGINAL (sem nenhuma alteração)
+=============================================================
+
+O app usa UM ÚNICO arquivo, exatamente como você o tem, sem redesenho.
+
+PASSO ÚNICO
+-----------
+Salve a sua logo ORIGINAL nesta pasta (public/) com EXATAMENTE este nome:
+
+    logo.png
+
+Qual versão usar?
+- Use a versão TEAL com fundo TRANSPARENTE
+  (a logo "WAL MORAIS / PERSONAL TRAINER" em teal).
+- O teal é legível tanto no fundo ESCURO do app
+  quanto no fundo BRANCO do relatório/PDF — por isso um arquivo só resolve.
+
+Observações
+- Pode ser PNG (recomendado, fundo transparente) ou ajuste para .svg
+  trocando o caminho em src/components/Logo.tsx.
+- Nenhuma cópia, recorte ou recriação da marca é feita pelo app:
+  ele apenas exibe o arquivo que você colocar aqui.
+- Enquanto o arquivo logo.png não existir, aparece só o texto "WAL MORAIS"
+  como reserva (sem desenhar a marca).
+
+Depois de salvar, recarregue a página: a logo original aparece sozinha.

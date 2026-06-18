@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(git clone *)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(GH_TOKEN=$\\(gh auth token\\) git push -u origin main)"
+    ]
+  }
+}

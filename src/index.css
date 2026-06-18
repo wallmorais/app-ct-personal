@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html, body, #root {
+  height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  @apply bg-base-bg text-white;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Evita o "pulo"/bounce do Safari e o atraso de toque do iOS */
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* text-base (16px) evita o zoom automático do iOS ao focar um campo */
+input, textarea, select {
+  @apply bg-base-surface border border-base-border rounded-xl px-3 py-2.5 text-white text-base w-full outline-none focus:border-emerald transition-colors;
+  /* Evita que inputs (ex.: type="date") empurrem o grid/flex para fora da
+     tela em celulares com largura reduzida. */
+  min-width: 0;
+}
+
+/* Em telas estreitas, o seletor de data nativo pode ficar maior que a
+   coluna do grid — reduz o padding horizontal para caber sem cortar o dia/mês/ano. */
+input[type="date"] {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+input[type="checkbox"], input[type="radio"] {
+  @apply p-0 border-none rounded;
+  width: 18px;
+  height: 18px;
+}
+
+/* Ícone do seletor de data legível no tema escuro */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+label {
+  @apply text-xs font-medium text-base-muted mb-1 block;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  /* Remove o fundo escuro do app inteiro para não sobrar "moldura preta"
+     em volta da página impressa, especialmente em celulares. */
+  html, body, #root, #root > div {
+    background: #fff !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  #root > div {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Largura fixa (área útil do A4 com margem de 14mm) para que o relatório
+     tenha o mesmo layout em qualquer dispositivo — celular, tablet ou
+     computador — em vez de se basear na largura da tela. */
+  #relatorio-print {
+    color: #0f172a;
+    background: #fff;
+    width: 190mm;
+    max-width: 190mm;
+    margin: 0 auto;
+  }
+
+  #relatorio-print * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  /* Tabelas do relatório */
+  #relatorio-print table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  #relatorio-print th,
+  #relatorio-print td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  #relatorio-print thead th {
+    background: #1e293b !important;
+    color: #fff !important;
+    font-weight: 700;
+    border-bottom: none;
+  }
+
+  #relatorio-print tr.total-row td {
+    font-weight: 700;
+    background: #f1f5f9 !important;
+  }
+
+  #relatorio-print img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #relatorio-print .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Evita cortar blocos no meio entre páginas */
+  #relatorio-print .avoid-break {
+    break-inside: avoid;
+  }
+}
