@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload } from 'lucide-react';
+import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User } from 'lucide-react';
 import type { AppData } from '../types';
 import {
   exportData,
@@ -17,6 +17,8 @@ import {
   requestNotificationPermission,
   type NotificationPermissionState,
 } from '../lib/notifications';
+import Toast, { type ToastState } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 
 interface Props {
   data: AppData;
@@ -39,6 +41,8 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
     getNotificationPermission(),
   );
   const [backups, setBackups] = useState<BackupEntry[]>(() => listBackups());
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [backupParaExcluir, setBackupParaExcluir] = useState<string | null>(null);
 
   useEffect(() => {
     setBackups(listBackups());
@@ -52,22 +56,24 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
     const result = await requestNotificationPermission();
     setPermission(result);
     if (result === 'denied') {
-      alert(
-        'As notificações estão bloqueadas. Habilite nas configurações do navegador/site para receber o lembrete.',
-      );
+      setToast({
+        type: 'error',
+        message:
+          'As notificações estão bloqueadas. Habilite nas configurações do navegador/site para receber o lembrete.',
+      });
     }
   }
 
   function handleManualBackup() {
     const entry = createAutoBackup(data);
     setBackups(listBackups());
-    alert(`Backup criado: ${entry.name}`);
+    setToast({ type: 'success', message: `Backup criado: ${entry.name}` });
   }
 
   function handleDeleteBackup(name: string) {
-    if (!confirm(`Excluir o backup ${name}?`)) return;
     deleteBackup(name);
     setBackups(listBackups());
+    setBackupParaExcluir(null);
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -76,9 +82,12 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
     try {
       const imported = await importData(file);
       setData(imported);
-      alert('Backup importado com sucesso!');
+      setToast({ type: 'success', message: 'Backup importado com sucesso!' });
     } catch (err) {
-      alert('Não foi possível importar o arquivo. Verifique se é um backup válido.');
+      setToast({
+        type: 'error',
+        message: 'Não foi possível importar o arquivo. Verifique se é um backup válido.',
+      });
     } finally {
       e.target.value = '';
     }
@@ -89,6 +98,47 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
   return (
     <div className="space-y-5">
       <h2 className="text-lg font-bold">Configurações</h2>
+
+      {/* ============ PERFIL PROFISSIONAL ============ */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2 text-electric">
+          <User size={18} />
+          <h3 className="text-sm font-semibold">Perfil profissional</h3>
+        </div>
+        <p className="text-xs text-base-muted">
+          Aparece no cabeçalho e na assinatura do relatório em PDF.
+        </p>
+        <div>
+          <label htmlFor="config-nome">Nome</label>
+          <input
+            id="config-nome"
+            type="text"
+            value={data.config.nomeProfissional}
+            onChange={(e) =>
+              setData((prev) => ({
+                ...prev,
+                config: { ...prev.config, nomeProfissional: e.target.value },
+              }))
+            }
+            placeholder="Seu nome completo"
+          />
+        </div>
+        <div>
+          <label htmlFor="config-registro">Registro / Certificação</label>
+          <input
+            id="config-registro"
+            type="text"
+            value={data.config.registroProfissional}
+            onChange={(e) =>
+              setData((prev) => ({
+                ...prev,
+                config: { ...prev.config, registroProfissional: e.target.value },
+              }))
+            }
+            placeholder="Ex: Personal Trainer • CREF 000000"
+          />
+        </div>
+      </section>
 
       {/* ============ LEMBRETE DIÁRIO ============ */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
@@ -183,7 +233,7 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
                   <HardDriveDownload size={16} />
                 </button>
                 <button
-                  onClick={() => handleDeleteBackup(b.name)}
+                  onClick={() => setBackupParaExcluir(b.name)}
                   aria-label="Excluir backup"
                   className="w-9 h-9 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center active:bg-red-500/20 shrink-0"
                 >
@@ -225,6 +275,17 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
           onChange={handleImport}
         />
       </section>
+
+      {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
+
+      {backupParaExcluir && (
+        <ConfirmDialog
+          title="Excluir backup"
+          message={`Excluir o backup ${backupParaExcluir}?`}
+          onCancel={() => setBackupParaExcluir(null)}
+          onConfirm={() => handleDeleteBackup(backupParaExcluir)}
+        />
+      )}
     </div>
   );
 }

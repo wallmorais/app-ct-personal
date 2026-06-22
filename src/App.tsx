@@ -4,6 +4,7 @@ import { loadData, saveData, runScheduledBackup } from './lib/storage';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
 import BottomNav from './components/BottomNav';
+import SidebarNav from './components/SidebarNav';
 import AlertBanner from './components/AlertBanner';
 import AgendaView from './components/AgendaView';
 import AlunosView from './components/AlunosView';
@@ -81,11 +82,13 @@ export default function App() {
     horario: string,
     status: StatusAula,
     reposicao?: { data: string; horario: string },
+    faltaObservacao?: string,
   ) {
     setData((prev) => {
       const existing = prev.registros.find(
         (r) => r.alunoId === alunoId && r.slotId === slotId && r.data === dataAula,
       );
+      const observacao = status === 'falta' ? faltaObservacao?.trim() || undefined : undefined;
 
       if (existing) {
         return {
@@ -97,6 +100,7 @@ export default function App() {
                   status,
                   reposicaoData: reposicao?.data,
                   reposicaoHorario: reposicao?.horario,
+                  faltaObservacao: observacao,
                 }
               : r,
           ),
@@ -116,6 +120,7 @@ export default function App() {
             status,
             reposicaoData: reposicao?.data,
             reposicaoHorario: reposicao?.horario,
+            faltaObservacao: observacao,
           },
         ],
       };
@@ -123,38 +128,44 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-base-bg flex flex-col">
-      <header
-        className="no-print sticky top-0 z-20 bg-base-bg/95 backdrop-blur border-b border-base-border px-[max(1rem,env(safe-area-inset-left))] py-2.5"
-        style={{ paddingTop: 'calc(0.625rem + env(safe-area-inset-top))' }}
-      >
-        <div className="max-w-2xl mx-auto">
-          <Logo variant="light" height={40} />
-        </div>
-      </header>
-
-      {showAlert && (
-        <div className="no-print">
-          <AlertBanner pendingCount={pendingToday} onDismiss={() => setForceAlert(false)} />
-        </div>
-      )}
-
-      <main className="flex-1 px-[max(1rem,env(safe-area-inset-left))] pt-4 pb-28 max-w-md sm:max-w-2xl w-full mx-auto">
-        {view === 'agenda' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
-        {view === 'alunos' && <AlunosView data={data} setData={setData} />}
-        {view === 'relatorios' && <RelatoriosView data={data} />}
-        {view === 'config' && (
-          <ConfigView
-            data={data}
-            setData={setData}
-            pendingToday={pendingToday}
-            onTestNotification={() => setForceAlert(true)}
-          />
-        )}
-      </main>
-
+    <div className="min-h-screen min-h-[100dvh] bg-base-bg flex lg:flex-row">
       <div className="no-print">
-        <BottomNav view={view} onChange={setView} />
+        <SidebarNav view={view} onChange={setView} />
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header
+          className="lg:hidden no-print sticky top-0 z-20 bg-base-bg/95 backdrop-blur border-b border-base-border px-[max(1rem,env(safe-area-inset-left))] py-2.5"
+          style={{ paddingTop: 'calc(0.625rem + env(safe-area-inset-top))' }}
+        >
+          <div className="max-w-2xl mx-auto">
+            <Logo variant="light" height={40} />
+          </div>
+        </header>
+
+        {showAlert && (
+          <div className="no-print">
+            <AlertBanner pendingCount={pendingToday} onDismiss={() => setForceAlert(false)} />
+          </div>
+        )}
+
+        <main className="flex-1 px-[max(1rem,env(safe-area-inset-left))] pt-4 lg:pt-8 pb-28 lg:pb-10 max-w-md sm:max-w-2xl lg:max-w-4xl w-full mx-auto">
+          {view === 'agenda' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
+          {view === 'alunos' && <AlunosView data={data} setData={setData} />}
+          {view === 'relatorios' && <RelatoriosView data={data} />}
+          {view === 'config' && (
+            <ConfigView
+              data={data}
+              setData={setData}
+              pendingToday={pendingToday}
+              onTestNotification={() => setForceAlert(true)}
+            />
+          )}
+        </main>
+
+        <div className="no-print">
+          <BottomNav view={view} onChange={setView} />
+        </div>
       </div>
     </div>
   );

@@ -1,23 +1,16 @@
-import { CalendarDays, Users, BarChart3, Settings } from 'lucide-react';
 import type { ViewName } from '../types';
+import { NAV_ITEMS } from '../lib/navItems';
 
 interface Props {
   view: ViewName;
   onChange: (view: ViewName) => void;
 }
 
-const ITEMS: { key: ViewName; label: string; icon: typeof CalendarDays }[] = [
-  { key: 'agenda', label: 'Agenda', icon: CalendarDays },
-  { key: 'alunos', label: 'Alunos', icon: Users },
-  { key: 'relatorios', label: 'Relatório', icon: BarChart3 },
-  { key: 'config', label: 'Config', icon: Settings },
-];
-
 export default function BottomNav({ view, onChange }: Props) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-base-surface/95 backdrop-blur border-t border-base-border pb-[env(safe-area-inset-bottom)]">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-base-surface/95 backdrop-blur border-t border-base-border pb-[env(safe-area-inset-bottom)]">
       <div className="grid grid-cols-4 max-w-md sm:max-w-2xl mx-auto">
-        {ITEMS.map(({ key, label, icon: Icon }) => {
+        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
           const active = view === key;
           return (
             <button

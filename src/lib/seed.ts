@@ -53,6 +53,10 @@ export function buildSeedData(): AppData {
     alunos,
     slots,
     registros: [],
-    config: { notificationTime: '21:00' },
+    config: {
+      notificationTime: '21:00',
+      nomeProfissional: 'Wal Morais',
+      registroProfissional: 'Personal Trainer',
+    },
   };
 }

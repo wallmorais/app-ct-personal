@@ -4,6 +4,8 @@ import { todayISO } from '../lib/date';
 
 interface Props {
   alunoNome: string;
+  origData: string;
+  origHorario: string;
   initialData?: string;
   initialHorario?: string;
   onConfirm: (data: string, horario: string) => void;
@@ -13,6 +15,8 @@ interface Props {
 
 export default function ReposicaoModal({
   alunoNome,
+  origData,
+  origHorario,
   initialData,
   initialHorario,
   onConfirm,
@@ -21,6 +25,8 @@ export default function ReposicaoModal({
 }: Props) {
   const [data, setData] = useState(initialData ?? todayISO());
   const [horario, setHorario] = useState(initialHorario ?? '07:00');
+
+  const mesmaDataHorarioOrigem = data === origData && horario === origHorario;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -61,6 +67,11 @@ export default function ReposicaoModal({
               onChange={(e) => setHorario(e.target.value)}
             />
           </div>
+          {mesmaDataHorarioOrigem && (
+            <p className="text-xs text-red-400">
+              A reposição precisa ser em uma data ou horário diferente da aula original.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-3 mt-5">
@@ -81,7 +92,8 @@ export default function ReposicaoModal({
           </button>
           <button
             onClick={() => onConfirm(data, horario)}
-            className="flex-1 py-3 rounded-xl bg-amber-500 text-black text-sm font-semibold active:bg-amber-400"
+            disabled={mesmaDataHorarioOrigem}
+            className="flex-1 py-3 rounded-xl bg-amber-500 text-black text-sm font-semibold active:bg-amber-400 disabled:opacity-40 disabled:active:bg-amber-500"
           >
             Confirmar
           </button>

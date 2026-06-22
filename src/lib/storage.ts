@@ -15,6 +15,9 @@ export function loadData(): AppData {
     if (!parsed.alunos || !parsed.slots || !parsed.registros || !parsed.config) {
       throw new Error('formato inválido');
     }
+    // Migração: garante campos novos de config para dados salvos em versões anteriores.
+    parsed.config.nomeProfissional ??= 'Wal Morais';
+    parsed.config.registroProfissional ??= 'Personal Trainer';
     return parsed;
   } catch {
     const seeded = buildSeedData();

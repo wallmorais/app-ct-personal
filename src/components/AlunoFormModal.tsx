@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Trash2, CalendarClock } from 'lucide-react';
 import type { Aluno, AulaSlot, DiaSemana } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 
 interface Props {
   aluno: Aluno | null;
@@ -61,8 +62,16 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
   const [valorAula, setValorAula] = useState(aluno?.valorAula ?? 100);
   const [observacoes, setObservacoes] = useState(aluno?.observacoes ?? '');
   const [agenda, setAgenda] = useState<AgendaState>(() => buildInitialAgenda(aluno, slots));
+  const [nomeErro, setNomeErro] = useState(false);
+  const [horarioErro, setHorarioErro] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   const isEdit = !!aluno;
+
+  function horarioInvalido(dia: DiaSemana): boolean {
+    const item = agenda[dia];
+    return item.ativo && item.fim <= item.inicio;
+  }
 
   function toggleDia(dia: DiaSemana) {
     setAgenda((prev) => ({
@@ -76,10 +85,20 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
       ...prev,
       [dia]: { ...prev[dia], [campo]: valor },
     }));
+    if (horarioErro) setHorarioErro(false);
   }
 
   function handleSubmit() {
-    if (!nome.trim()) return;
+    if (!nome.trim()) {
+      setNomeErro(true);
+      return;
+    }
+
+    const temHorarioInvalido = DIAS.some((d) => horarioInvalido(d.value));
+    if (temHorarioInvalido) {
+      setHorarioErro(true);
+      return;
+    }
 
     const agendaSelecionada: AgendaDia[] = DIAS.filter((d) => agenda[d.value].ativo).map((d) => ({
       dia: d.value,
@@ -117,9 +136,20 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
               id="aluno-nome"
               type="text"
               value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (nomeErro) setNomeErro(false);
+              }}
               placeholder="Nome do aluno"
+              className={nomeErro ? '!border-red-500 focus:!border-red-500' : ''}
+              aria-invalid={nomeErro}
+              aria-describedby={nomeErro ? 'aluno-nome-erro' : undefined}
             />
+            {nomeErro && (
+              <p id="aluno-nome-erro" className="text-xs text-red-400 mt-1">
+                Informe o nome do aluno.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="aluno-telefone">Telefone</label>
@@ -174,11 +204,16 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
             <div className="space-y-2">
               {DIAS.map((d) => {
                 const item = agenda[d.value];
+                const invalido = horarioErro && horarioInvalido(d.value);
                 return (
                   <div
                     key={d.value}
                     className={`rounded-xl border px-3 py-2.5 transition-colors ${
-                      item.ativo ? 'border-electric/50 bg-electric/5' : 'border-base-border bg-base-surface'
+                      invalido
+                        ? 'border-red-500/60 bg-red-500/5'
+                        : item.ativo
+                          ? 'border-electric/50 bg-electric/5'
+                          : 'border-base-border bg-base-surface'
                     }`}
                   >
                     <label className="flex items-center gap-2.5 !mb-0 cursor-pointer">
@@ -192,26 +227,35 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
                     </label>
 
                     {item.ativo && (
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div>
-                          <label htmlFor={`inicio-${d.value}`} className="!mb-1">Início</label>
-                          <input
-                            id={`inicio-${d.value}`}
-                            type="time"
-                            value={item.inicio}
-                            onChange={(e) => updateHorario(d.value, 'inicio', e.target.value)}
-                          />
+                      <>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <div>
+                            <label htmlFor={`inicio-${d.value}`} className="!mb-1">Início</label>
+                            <input
+                              id={`inicio-${d.value}`}
+                              type="time"
+                              value={item.inicio}
+                              onChange={(e) => updateHorario(d.value, 'inicio', e.target.value)}
+                              className={invalido ? '!border-red-500 focus:!border-red-500' : ''}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`fim-${d.value}`} className="!mb-1">Término</label>
+                            <input
+                              id={`fim-${d.value}`}
+                              type="time"
+                              value={item.fim}
+                              onChange={(e) => updateHorario(d.value, 'fim', e.target.value)}
+                              className={invalido ? '!border-red-500 focus:!border-red-500' : ''}
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label htmlFor={`fim-${d.value}`} className="!mb-1">Término</label>
-                          <input
-                            id={`fim-${d.value}`}
-                            type="time"
-                            value={item.fim}
-                            onChange={(e) => updateHorario(d.value, 'fim', e.target.value)}
-                          />
-                        </div>
-                      </div>
+                        {invalido && (
+                          <p className="text-xs text-red-400 mt-1.5">
+                            O término deve ser depois do início.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -223,11 +267,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
         <div className="flex gap-3 mt-5">
           {isEdit && onDelete && (
             <button
-              onClick={() => {
-                if (confirm(`Excluir ${aluno!.nome}? Esta ação não pode ser desfeita.`)) {
-                  onDelete(aluno!.id);
-                }
-              }}
+              onClick={() => setConfirmandoExclusao(true)}
               aria-label="Excluir aluno"
               className="w-12 h-12 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center active:bg-red-500/20"
             >
@@ -242,6 +282,18 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
           </button>
         </div>
       </div>
+
+      {confirmandoExclusao && isEdit && onDelete && (
+        <ConfirmDialog
+          title="Excluir aluno"
+          message={`Excluir ${aluno!.nome}? Esta ação não pode ser desfeita.`}
+          onCancel={() => setConfirmandoExclusao(false)}
+          onConfirm={() => {
+            setConfirmandoExclusao(false);
+            onDelete(aluno!.id);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,12 @@ export function currentMonthRange(): DateRange {
   return { start, end };
 }
 
+export function previousMonthRange(): DateRange {
+  const start = shiftMonth(startOfMonth(todayISO()), -1);
+  const end = addDays(shiftMonth(start, 1), -1);
+  return { start, end };
+}
+
 export interface AlunoStats {
   aluno: Aluno;
   presencas: number;
@@ -50,9 +56,12 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
   ).length;
   const presencas = presencasRegulares + presencasReposicao;
 
-  const faltas = doPeriodo.filter((r) => r.status === 'falta').length;
-  // Conta reposições agendadas no período, mesmo após confirmação (RN04)
-  const reposicoes = doPeriodo.filter((r) => r.status === 'reposicao' || !!r.reposicaoData).length;
+  const faltas = doPeriodo.filter((r) => r.status === 'falta' && !r.reposicaoData).length;
+  // Conta reposições pela data em que ocorreram (reposicaoData), não pela data original —
+  // consistente com presencasReposicao e com RN04 (conta mesmo após confirmação).
+  const reposicoes = doAluno.filter(
+    (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
+  ).length;
   const taxaPresenca = aluno.plano > 0 ? Math.round((presencas / aluno.plano) * 100) : 0;
   const faturamento = presencas * aluno.valorAula;
 
@@ -90,6 +99,8 @@ export interface HistoricoEntry {
   origem?: { data: string; horario: string };
   /** Para entradas 'normal' com reposição marcada: para onde a aula foi remarcada */
   reagendadoPara?: { data: string; horario: string };
+  /** Observação opcional registrada ao marcar falta. */
+  faltaObservacao?: string;
 }
 
 export function historicoDoAluno(
@@ -113,6 +124,7 @@ export function historicoDoAluno(
           r.reposicaoData && r.reposicaoHorario
             ? { data: r.reposicaoData, horario: r.reposicaoHorario }
             : undefined,
+        faltaObservacao: r.faltaObservacao,
       });
     }
 
@@ -129,6 +141,7 @@ export function historicoDoAluno(
         status: r.status,
         tipo: 'reagendamento',
         origem: { data: r.data, horario: r.horario },
+        faltaObservacao: r.faltaObservacao,
       });
     }
   }

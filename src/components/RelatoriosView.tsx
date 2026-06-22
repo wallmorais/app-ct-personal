@@ -6,19 +6,18 @@ import {
   historicoDoAluno,
   formatBRL,
   currentMonthRange,
+  previousMonthRange,
   type AlunoStats,
   type HistoricoEntry,
   type DateRange,
 } from '../lib/billing';
-import { formatDateLabel } from '../lib/date';
+import { formatDateLabel, monthLabel, startOfMonth } from '../lib/date';
 import { Logo } from './Logo';
 
 interface Props {
   data: AppData;
 }
 
-const PROFISSIONAL = 'Waldnea Morais de Souza';
-const REGISTRO_PROF = 'Personal Trainer • CREF / Certificação';
 
 type Situacao = 'Presença' | 'Falta' | 'Substituição' | 'Pendente';
 
@@ -51,10 +50,16 @@ function situacaoDe(entry: HistoricoEntry): Situacao {
 
 function observacaoDe(entry: HistoricoEntry): string {
   if (entry.tipo === 'reagendamento' && entry.origem) {
-    return `Origem: ${formatDateLabel(entry.origem.data)} às ${entry.origem.horario}`;
+    const origem = `Origem: ${formatDateLabel(entry.origem.data)} às ${entry.origem.horario}`;
+    return entry.status === 'falta' && entry.faltaObservacao
+      ? `${origem} — ${entry.faltaObservacao}`
+      : origem;
   }
   if (entry.reagendadoPara) {
     return `Substituição em ${formatDateLabel(entry.reagendadoPara.data)} às ${entry.reagendadoPara.horario}`;
+  }
+  if (entry.status === 'falta' && entry.faltaObservacao) {
+    return entry.faltaObservacao;
   }
   return '—';
 }
@@ -100,6 +105,9 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
           <p className="text-[11px] text-amber-400 mt-0.5">
             → Substituição em {formatDateLabel(entry.reagendadoPara.data)} às {entry.reagendadoPara.horario}
           </p>
+        )}
+        {entry.status === 'falta' && entry.faltaObservacao && (
+          <p className="text-[11px] text-red-400 mt-0.5">Obs.: {entry.faltaObservacao}</p>
         )}
       </div>
     </div>
@@ -258,6 +266,8 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
 }
 
 export default function RelatoriosView({ data }: Props) {
+  const nomeProfissional = data.config.nomeProfissional;
+  const registroProfissional = data.config.registroProfissional;
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
 
@@ -342,7 +352,7 @@ export default function RelatoriosView({ data }: Props) {
           }}
         >
           <div>
-            <strong>Profissional:</strong> {PROFISSIONAL}
+            <strong>Profissional:</strong> {nomeProfissional}
           </div>
           <div>
             <strong>Período:</strong> {formatPeriodo(range)}
@@ -374,6 +384,24 @@ export default function RelatoriosView({ data }: Props) {
       {/* Filtro de período — só na tela */}
       <div className="no-print space-y-2">
         <label className="!mb-0 px-1">Período do relatório</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[currentMonthRange(), previousMonthRange()].map((preset, i) => {
+            const active = range.start === preset.start && range.end === preset.end;
+            return (
+              <button
+                key={i}
+                onClick={() => setRange(preset)}
+                className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                  active
+                    ? 'bg-emerald text-black border-emerald'
+                    : 'bg-base-surface text-base-muted border-base-border active:bg-white/5'
+                }`}
+              >
+                {monthLabel(startOfMonth(preset.start))}
+              </button>
+            );
+          })}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="relatorio-data-inicial" className="!mb-1">Data inicial</label>
@@ -477,9 +505,9 @@ export default function RelatoriosView({ data }: Props) {
         <div className="avoid-break" style={{ marginTop: 40, display: 'flex', justifyContent: 'space-between', gap: 40 }}>
           <div style={{ flex: 1 }}>
             <div style={{ borderTop: '1px solid #000', paddingTop: 4, fontSize: 11, fontWeight: 700 }}>
-              {PROFISSIONAL}
+              {nomeProfissional}
             </div>
-            <div style={{ fontSize: 9, color: '#64748b' }}>{REGISTRO_PROF}</div>
+            <div style={{ fontSize: 9, color: '#64748b' }}>{registroProfissional}</div>
           </div>
           <div style={{ flex: 1, textAlign: 'right' }}>
             <div style={{ borderTop: '1px solid #000', paddingTop: 4, fontSize: 11, fontWeight: 700 }}>

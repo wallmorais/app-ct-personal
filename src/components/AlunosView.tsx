@@ -25,20 +25,38 @@ export default function AlunosView({ data, setData }: Props) {
         ? prev.alunos.map((a) => (a.id === aluno.id ? aluno : a))
         : [...prev.alunos, aluno];
 
-      // remove o aluno de todos os slots existentes e descarta os que ficarem vazios
-      const slotsBase = prev.slots
+      // Remove o aluno de todos os slots existentes; descarta os que ficarem vazios.
+      let slots = prev.slots
         .map((s) => ({ ...s, alunoIds: s.alunoIds.filter((id) => id !== aluno.id) }))
         .filter((s) => s.alunoIds.length > 0);
 
-      const novosSlots = agenda.map((item) => ({
-        id: crypto.randomUUID(),
-        horario: item.inicio,
-        horarioFim: item.fim,
-        dias: [item.dia],
-        alunoIds: [aluno.id],
-      }));
+      // Para cada dia da nova agenda, tenta reaproveitar um slot existente no mesmo
+      // horário+dia (ex.: turma compartilhada). Se não existir, cria um novo.
+      for (const item of agenda) {
+        const existingIdx = slots.findIndex(
+          (s) => s.horario === item.inicio && s.dias.includes(item.dia),
+        );
+        if (existingIdx !== -1) {
+          slots = slots.map((s, i) =>
+            i === existingIdx && !s.alunoIds.includes(aluno.id)
+              ? { ...s, horarioFim: item.fim, alunoIds: [...s.alunoIds, aluno.id] }
+              : s,
+          );
+        } else {
+          slots = [
+            ...slots,
+            {
+              id: crypto.randomUUID(),
+              horario: item.inicio,
+              horarioFim: item.fim,
+              dias: [item.dia],
+              alunoIds: [aluno.id],
+            },
+          ];
+        }
+      }
 
-      return { ...prev, alunos, slots: [...slotsBase, ...novosSlots] };
+      return { ...prev, alunos, slots };
     });
     setEditing(null);
   }

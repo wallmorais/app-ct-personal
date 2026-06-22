@@ -29,10 +29,14 @@ export interface Registro {
   status: StatusAula;
   reposicaoData?: string;
   reposicaoHorario?: string;
+  /** Observação opcional registrada ao marcar falta (ex.: motivo, aviso prévio). */
+  faltaObservacao?: string;
 }
 
 export interface ConfigData {
   notificationTime: string; // "HH:MM"
+  nomeProfissional: string;
+  registroProfissional: string;
 }
 
 export interface AppData {

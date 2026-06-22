@@ -14,6 +14,7 @@ import {
   todayISO,
 } from '../lib/date';
 import ReposicaoModal from './ReposicaoModal';
+import FaltaModal from './FaltaModal';
 import MonthlyCalendar from './MonthlyCalendar';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
     horario: string,
     status: StatusAula,
     reposicao?: { data: string; horario: string },
+    faltaObservacao?: string,
   ) => void;
 }
 
@@ -46,6 +48,16 @@ interface ModalState {
   allowRemove: boolean;
 }
 
+interface FaltaModalState {
+  alunoId: string;
+  alunoNome: string;
+  slotId: string;
+  data: string;
+  horario: string;
+  /** Quando true, esta falta é sobre a aula de reposição (não a aula regular). */
+  reposicao?: { data: string; horario: string };
+}
+
 const STATUS_STYLES: Record<StatusAula, string> = {
   pendente: 'border-base-border',
   presente: 'border-emerald/60',
@@ -58,6 +70,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [monthCursor, setMonthCursor] = useState(startOfMonth(todayISO()));
   const [modalState, setModalState] = useState<ModalState | null>(null);
+  const [faltaModalState, setFaltaModalState] = useState<FaltaModalState | null>(null);
 
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
 
@@ -110,14 +123,41 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       });
       return;
     }
+
     const current = data.registros.find(
       (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
     );
+
+    if (status === 'falta' && current?.status !== 'falta') {
+      const aluno = data.alunos.find((a) => a.id === alunoId);
+      setFaltaModalState({
+        alunoId,
+        alunoNome: aluno?.nome ?? '',
+        slotId: slot.id,
+        data: selectedDate,
+        horario: slot.horario,
+      });
+      return;
+    }
+
     const next = current?.status === status ? 'pendente' : status;
     onUpdateRegistro(alunoId, slot.id, selectedDate, slot.horario, next);
   }
 
   function handleReposicaoStatus(registro: Registro, status: StatusAula) {
+    if (status === 'falta' && registro.status !== 'falta') {
+      const aluno = data.alunos.find((a) => a.id === registro.alunoId);
+      setFaltaModalState({
+        alunoId: registro.alunoId,
+        alunoNome: aluno?.nome ?? '',
+        slotId: registro.slotId,
+        data: registro.data,
+        horario: registro.horario,
+        reposicao: { data: registro.reposicaoData!, horario: registro.reposicaoHorario! },
+      });
+      return;
+    }
+
     const next = registro.status === status ? 'reposicao' : status;
     onUpdateRegistro(registro.alunoId, registro.slotId, registro.data, registro.horario, next, {
       data: registro.reposicaoData!,
@@ -262,6 +302,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             <p className="text-[11px] text-base-muted mt-0.5">
                               Origem: {formatDateLabel(registro.data)} às {registro.horario}
                             </p>
+                            {status === 'falta' && registro.faltaObservacao && (
+                              <p className="text-[11px] text-red-400 mt-0.5">
+                                Obs.: {registro.faltaObservacao}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
@@ -310,6 +355,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             <p className="text-[11px] text-amber-400 mt-0.5">
                               Reposição agendada: {formatDateLabel(item.registro.reposicaoData)} às{' '}
                               {item.registro.reposicaoHorario}
+                            </p>
+                          )}
+                          {status === 'falta' && item.registro?.faltaObservacao && (
+                            <p className="text-[11px] text-red-400 mt-0.5">
+                              Obs.: {item.registro.faltaObservacao}
                             </p>
                           )}
                         </div>
@@ -361,6 +411,8 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       {modalState && (
         <ReposicaoModal
           alunoNome={modalState.alunoNome}
+          origData={modalState.origData}
+          origHorario={modalState.origHorario}
           initialData={modalState.initialData}
           initialHorario={modalState.initialHorario}
           onClose={() => setModalState(null)}
@@ -388,6 +440,25 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
               { data: reposicaoData, horario: reposicaoHorario },
             );
             setModalState(null);
+          }}
+        />
+      )}
+
+      {faltaModalState && (
+        <FaltaModal
+          alunoNome={faltaModalState.alunoNome}
+          onClose={() => setFaltaModalState(null)}
+          onConfirm={(observacao) => {
+            onUpdateRegistro(
+              faltaModalState.alunoId,
+              faltaModalState.slotId,
+              faltaModalState.data,
+              faltaModalState.horario,
+              'falta',
+              faltaModalState.reposicao,
+              observacao,
+            );
+            setFaltaModalState(null);
           }}
         />
       )}
