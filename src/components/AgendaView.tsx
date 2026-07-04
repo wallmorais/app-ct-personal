@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, X, RotateCw, Clock, ChevronLeft, ChevronRight, CalendarRange } from 'lucide-react';
+import { Check, X, RotateCw, ChevronLeft, ChevronRight, CalendarRange, AlertTriangle } from 'lucide-react';
 import type { AppData, AulaSlot, Registro, StatusAula } from '../types';
 import {
   ORDEM_SEMANA,
@@ -37,6 +37,11 @@ interface AgendaItem {
   registro?: Registro;
 }
 
+interface FlatCard {
+  horario: string;
+  item: AgendaItem;
+}
+
 interface ModalState {
   alunoId: string;
   alunoNome: string;
@@ -54,16 +59,50 @@ interface FaltaModalState {
   slotId: string;
   data: string;
   horario: string;
-  /** Quando true, esta falta é sobre a aula de reposição (não a aula regular). */
   reposicao?: { data: string; horario: string };
 }
 
-const STATUS_STYLES: Record<StatusAula, string> = {
-  pendente: 'border-base-border',
-  presente: 'border-emerald/60',
-  falta: 'border-red-500/60',
-  reposicao: 'border-amber-500/60',
+const STATUS_LABEL: Record<StatusAula, string> = {
+  pendente: 'Pendente',
+  presente: 'Presente',
+  falta: 'Falta',
+  reposicao: 'Reposição agendada',
 };
+
+const STATUS_BADGE: Record<StatusAula, string> = {
+  pendente: 'text-base-muted bg-base-surface border-base-border',
+  presente: 'text-emerald bg-emerald/10 border-emerald/40',
+  falta: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30',
+  reposicao: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
+};
+
+const STATUS_CARD_BORDER: Record<StatusAula, string> = {
+  pendente: 'border-base-border',
+  presente: 'border-emerald/30',
+  falta: 'border-red-500/30',
+  reposicao: 'border-amber-500/30',
+};
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  color?: 'default' | 'green' | 'red' | 'amber';
+}
+
+function StatCard({ label, value, color = 'default' }: StatCardProps) {
+  const valueColor =
+    color === 'green' ? 'text-emerald' :
+    color === 'red' ? 'text-red-500 dark:text-red-400' :
+    color === 'amber' ? 'text-amber-500 dark:text-amber-400' :
+    'text-base-fg';
+
+  return (
+    <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
+      <p className={`text-2xl font-bold tabular-nums leading-tight ${valueColor}`}>{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1 leading-tight">{label}</p>
+    </div>
+  );
+}
 
 export default function AgendaView({ data, onUpdateRegistro }: Props) {
   const [viewMode, setViewMode] = useState<'dia' | 'mes'>('dia');
@@ -82,9 +121,10 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     });
   }, [weekStart, selectedDate]);
 
-  const cards = useMemo(() => {
+  // Agrupa por horário (Map), depois achata em lista individual por aluno
+  const flatCards = useMemo<FlatCard[]>(() => {
     const dow = dowOf(selectedDate);
-    const map = new Map<string, AgendaItem[]>();
+    const result: FlatCard[] = [];
 
     for (const slot of data.slots) {
       if (!slot.dias.includes(dow)) continue;
@@ -92,9 +132,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         const registro = data.registros.find(
           (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
         );
-        const list = map.get(slot.horario) ?? [];
-        list.push({ alunoId, slot, kind: 'regular', registro });
-        map.set(slot.horario, list);
+        result.push({ horario: slot.horario, item: { alunoId, slot, kind: 'regular', registro } });
       }
     }
 
@@ -102,13 +140,27 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       if (registro.reposicaoData !== selectedDate || !registro.reposicaoHorario) continue;
       const slot = data.slots.find((s) => s.id === registro.slotId);
       if (!slot) continue;
-      const list = map.get(registro.reposicaoHorario) ?? [];
-      list.push({ alunoId: registro.alunoId, slot, kind: 'reposicao', registro });
-      map.set(registro.reposicaoHorario, list);
+      result.push({
+        horario: registro.reposicaoHorario,
+        item: { alunoId: registro.alunoId, slot, kind: 'reposicao', registro },
+      });
     }
 
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return result.sort((a, b) => a.horario.localeCompare(b.horario));
   }, [data.slots, data.registros, selectedDate]);
+
+  // Stats do dia selecionado
+  const stats = useMemo(() => {
+    let presentes = 0, faltas = 0, reposPendentes = 0;
+    for (const { item } of flatCards) {
+      const s = item.registro?.status ?? 'pendente';
+      if (s === 'presente') presentes++;
+      else if (s === 'falta') faltas++;
+      else if (s === 'reposicao') reposPendentes++;
+    }
+    const pendentes = flatCards.length - presentes - faltas - reposPendentes;
+    return { total: flatCards.length, presentes, faltas, reposPendentes, pendentes };
+  }, [flatCards]);
 
   function handleStatus(alunoId: string, slot: AulaSlot, status: StatusAula) {
     if (status === 'reposicao') {
@@ -181,6 +233,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Toggle dia / mês */}
       <div className="grid grid-cols-2 gap-2 bg-base-surface border border-base-border rounded-xl p-1">
         <button
           onClick={() => setViewMode('dia')}
@@ -188,8 +241,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             viewMode === 'dia' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
           }`}
         >
-          <Clock size={15} />
-          Dia
+          Hoje
         </button>
         <button
           onClick={() => {
@@ -205,6 +257,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         </button>
       </div>
 
+      {/* Calendário mensal */}
       {viewMode === 'mes' && (
         <MonthlyCalendar
           data={data}
@@ -218,55 +271,78 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         />
       )}
 
+      {/* View diária */}
       {viewMode === 'dia' && (
         <>
-          <div className="flex items-center justify-between">
+          {/* Navegação de semana */}
+          <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => setSelectedDate((d) => addDays(d, -7))}
               aria-label="Semana anterior"
-              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
+              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5 shrink-0"
             >
               <ChevronLeft size={18} />
             </button>
+
             <button
               onClick={() => setSelectedDate(todayISO())}
               className="text-xs font-semibold text-emerald px-3 py-1.5 rounded-full bg-emerald/10 active:bg-emerald/20"
             >
               Hoje
             </button>
+
             <button
               onClick={() => setSelectedDate((d) => addDays(d, 7))}
               aria-label="Próxima semana"
-              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
+              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5 shrink-0"
             >
               <ChevronRight size={18} />
             </button>
           </div>
 
+          {/* Strip de dias da semana */}
           <div className="grid grid-cols-7 gap-1">
             {weekDays.map(({ dow, dateISO, active, isToday }) => (
               <button
                 key={dateISO}
                 onClick={() => setSelectedDate(dateISO)}
-                className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                className={`flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl text-xs font-semibold border transition-colors ${
                   active
                     ? 'bg-emerald text-black border-emerald'
                     : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
                 }`}
               >
-                <span>{DIA_LABELS[dow]}</span>
-                <span>{formatDateShort(dateISO).slice(0, 2)}</span>
-                <span className={isToday ? (active ? 'text-black/60' : 'text-emerald') : 'invisible'}>•</span>
+                <span className="text-[10px] font-medium opacity-80">{DIA_LABELS[dow]}</span>
+                <span className="text-sm font-bold">{formatDateShort(dateISO).slice(0, 2)}</span>
+                <span className={`text-[8px] leading-none ${isToday ? (active ? 'text-black/60' : 'text-emerald') : 'invisible'}`}>●</span>
               </button>
             ))}
           </div>
 
-          <div className="flex items-center gap-2 text-base-muted text-sm">
-            <Clock size={15} />
-            <span>{formatDateLabel(selectedDate)}</span>
+          {/* Data selecionada */}
+          <p className="text-sm font-semibold text-base-muted px-1">{formatDateLabel(selectedDate)}</p>
+
+          {/* Stats do dia */}
+          <div className="grid grid-cols-4 gap-2">
+            <StatCard label="Aulas de hoje" value={stats.total} />
+            <StatCard label="Presenças" value={stats.presentes} color="green" />
+            <StatCard label="Faltas" value={stats.faltas} color="red" />
+            <StatCard label="Repos." value={stats.reposPendentes} color="amber" />
           </div>
 
-          {cards.length === 0 && (
+          {/* Alerta de pendentes */}
+          {stats.pendentes > 0 && (
+            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3">
+              <AlertTriangle size={18} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-sm text-red-700 dark:text-red-400 font-medium">
+                Você possui {stats.pendentes} {stats.pendentes === 1 ? 'aula' : 'aulas'} de hoje sem confirmação.
+                Revise antes de encerrar o dia.
+              </p>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {flatCards.length === 0 && (
             <div className="text-center py-16 space-y-2">
               <CalendarRange size={36} className="mx-auto text-base-muted opacity-30" aria-hidden="true" />
               <p className="text-base-muted text-sm font-medium">Nenhuma aula para este dia</p>
@@ -274,142 +350,160 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             </div>
           )}
 
+          {/* Cards individuais por aluno */}
           <div className="space-y-3">
-            {cards.map(([horario, items]) => (
-              <div key={horario} className="bg-base-card border border-base-border rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl font-bold tabular-nums">{horario}</span>
-                </div>
+            {flatCards.map(({ horario, item }) => {
+              const aluno = data.alunos.find((a) => a.id === item.alunoId);
+              if (!aluno) return null;
 
-                <div className="space-y-2">
-                  {items.map((item) => {
-                    const aluno = data.alunos.find((a) => a.id === item.alunoId);
-                    if (!aluno) return null;
+              if (item.kind === 'reposicao' && item.registro) {
+                const registro = item.registro;
+                const status = registro.status;
 
-                    if (item.kind === 'reposicao' && item.registro) {
-                      const registro = item.registro;
-                      const status = registro.status;
-                      return (
-                        <div
-                          key={`${registro.id}-reposicao`}
-                          className={`flex items-center justify-between gap-2 rounded-xl border bg-base-surface px-3 py-2.5 ${STATUS_STYLES[status]}`}
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-medium text-sm truncate">{aluno.nome}</p>
-                              <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                                Reposição
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-base-muted mt-0.5">
-                              Origem: {formatDateLabel(registro.data)} às {registro.horario}
-                            </p>
-                            {status === 'falta' && registro.faltaObservacao && (
-                              <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
-                                Obs.: {registro.faltaObservacao}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              aria-label="Reposição concluída"
-                              onClick={() => handleReposicaoStatus(registro, 'presente')}
-                              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                                status === 'presente'
-                                  ? 'bg-emerald text-black'
-                                  : 'bg-emerald/10 text-emerald active:bg-emerald/20'
-                              }`}
-                            >
-                              <Check size={18} strokeWidth={2.5} />
-                            </button>
-                            <button
-                              aria-label="Reposição não compareceu"
-                              onClick={() => handleReposicaoStatus(registro, 'falta')}
-                              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                                status === 'falta'
-                                  ? 'bg-red-500 text-white'
-                                  : 'bg-red-500/10 text-red-600 dark:text-red-400 active:bg-red-500/20'
-                              }`}
-                            >
-                              <X size={18} strokeWidth={2.5} />
-                            </button>
-                            <button
-                              aria-label="Reagendar reposição"
-                              onClick={() => handleReagendar(registro)}
-                              className="w-9 h-9 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-600 dark:text-amber-400 active:bg-amber-500/20"
-                            >
-                              <RotateCw size={18} strokeWidth={2.5} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const status: StatusAula = item.registro?.status ?? 'pendente';
-                    return (
-                      <div
-                        key={`${item.slot.id}-${item.alunoId}`}
-                        className={`flex items-center justify-between gap-2 rounded-xl border bg-base-surface px-3 py-2.5 ${STATUS_STYLES[status]}`}
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{aluno.nome}</p>
-                          {status === 'reposicao' && item.registro?.reposicaoData && (
-                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                              Reposição agendada: {formatDateLabel(item.registro.reposicaoData)} às{' '}
-                              {item.registro.reposicaoHorario}
-                            </p>
-                          )}
-                          {status === 'falta' && item.registro?.faltaObservacao && (
-                            <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
-                              Obs.: {item.registro.faltaObservacao}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            aria-label="Presença confirmada"
-                            onClick={() => handleStatus(item.alunoId, item.slot, 'presente')}
-                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                              status === 'presente'
-                                ? 'bg-emerald text-black'
-                                : 'bg-emerald/10 text-emerald active:bg-emerald/20'
-                            }`}
-                          >
-                            <Check size={18} strokeWidth={2.5} />
-                          </button>
-                          <button
-                            aria-label="Falta"
-                            onClick={() => handleStatus(item.alunoId, item.slot, 'falta')}
-                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                              status === 'falta'
-                                ? 'bg-red-500 text-white'
-                                : 'bg-red-500/10 text-red-600 dark:text-red-400 active:bg-red-500/20'
-                            }`}
-                          >
-                            <X size={18} strokeWidth={2.5} />
-                          </button>
-                          <button
-                            aria-label="Reposição"
-                            onClick={() => handleStatus(item.alunoId, item.slot, 'reposicao')}
-                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                              status === 'reposicao'
-                                ? 'bg-amber-500 text-black'
-                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 active:bg-amber-500/20'
-                            }`}
-                          >
-                            <RotateCw size={18} strokeWidth={2.5} />
-                          </button>
-                        </div>
+                return (
+                  <div
+                    key={`${registro.id}-rep`}
+                    className={`bg-base-card border rounded-2xl p-4 space-y-3 ${STATUS_CARD_BORDER[status]}`}
+                  >
+                    {/* Cabeçalho do card */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-base-surface border border-base-border flex items-center justify-center shrink-0">
+                        <span className="text-sm font-bold tabular-nums">{horario}</span>
                       </div>
-                    );
-                  })}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-base">{aluno.nome}</p>
+                          <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                            Reposição
+                          </span>
+                        </div>
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${STATUS_BADGE[status]}`}>
+                          {STATUS_LABEL[status]}
+                        </span>
+                        {status === 'falta' && registro.faltaObservacao && (
+                          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                            Obs.: {registro.faltaObservacao}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botões de ação */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        aria-label="Reposição concluída"
+                        onClick={() => handleReposicaoStatus(registro, 'presente')}
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                          status === 'presente'
+                            ? 'bg-emerald text-black border-emerald'
+                            : 'border-emerald/50 text-emerald active:bg-emerald/10'
+                        }`}
+                      >
+                        <Check size={14} strokeWidth={2.5} />
+                        Presente
+                      </button>
+                      <button
+                        aria-label="Reposição não compareceu"
+                        onClick={() => handleReposicaoStatus(registro, 'falta')}
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                          status === 'falta'
+                            ? 'bg-red-500 text-white border-red-500'
+                            : 'border-red-500/50 text-red-600 dark:text-red-400 active:bg-red-500/10'
+                        }`}
+                      >
+                        <X size={14} strokeWidth={2.5} />
+                        Falta
+                      </button>
+                      <button
+                        aria-label="Reagendar reposição"
+                        onClick={() => handleReagendar(registro)}
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-amber-500/50 text-amber-600 dark:text-amber-400 text-xs font-semibold active:bg-amber-500/10"
+                      >
+                        <RotateCw size={14} strokeWidth={2.5} />
+                        Reagendar
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Card de aula regular
+              const status: StatusAula = item.registro?.status ?? 'pendente';
+              return (
+                <div
+                  key={`${item.slot.id}-${item.alunoId}`}
+                  className={`bg-base-card border rounded-2xl p-4 space-y-3 ${STATUS_CARD_BORDER[status]}`}
+                >
+                  {/* Cabeçalho do card */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-base-surface border border-base-border flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold tabular-nums">{horario}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-base">{aluno.nome}</p>
+                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${STATUS_BADGE[status]}`}>
+                        {STATUS_LABEL[status]}
+                      </span>
+                      {status === 'reposicao' && item.registro?.reposicaoData && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                          Reposição: {formatDateLabel(item.registro.reposicaoData)} às {item.registro.reposicaoHorario}
+                        </p>
+                      )}
+                      {status === 'falta' && item.registro?.faltaObservacao && (
+                        <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                          Obs.: {item.registro.faltaObservacao}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Botões de ação */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      aria-label="Presença confirmada"
+                      onClick={() => handleStatus(item.alunoId, item.slot, 'presente')}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                        status === 'presente'
+                          ? 'bg-emerald text-black border-emerald'
+                          : 'border-emerald/50 text-emerald active:bg-emerald/10'
+                      }`}
+                    >
+                      <Check size={14} strokeWidth={2.5} />
+                      Presente
+                    </button>
+                    <button
+                      aria-label="Agendar reposição"
+                      onClick={() => handleStatus(item.alunoId, item.slot, 'reposicao')}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                        status === 'reposicao'
+                          ? 'bg-amber-500 text-black border-amber-500'
+                          : 'border-amber-500/50 text-amber-600 dark:text-amber-400 active:bg-amber-500/10'
+                      }`}
+                    >
+                      <RotateCw size={14} strokeWidth={2.5} />
+                      Reposição
+                    </button>
+                    <button
+                      aria-label="Marcar falta"
+                      onClick={() => handleStatus(item.alunoId, item.slot, 'falta')}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                        status === 'falta'
+                          ? 'bg-red-500 text-white border-red-500'
+                          : 'border-red-500/50 text-red-600 dark:text-red-400 active:bg-red-500/10'
+                      }`}
+                    >
+                      <X size={14} strokeWidth={2.5} />
+                      Falta
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
 
+      {/* Modal de reposição */}
       {modalState && (
         <ReposicaoModal
           alunoNome={modalState.alunoNome}
@@ -446,6 +540,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         />
       )}
 
+      {/* Modal de falta */}
       {faltaModalState && (
         <FaltaModal
           alunoNome={faltaModalState.alunoNome}
