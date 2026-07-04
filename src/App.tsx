@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import type { AppData, StatusAula, ViewName } from './types';
 import { loadData, saveData, runScheduledBackup } from './lib/storage';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { getThemePref, applyTheme, setThemePref, type ThemePref } from './lib/theme';
 import BottomNav from './components/BottomNav';
 import SidebarNav from './components/SidebarNav';
 import AlertBanner from './components/AlertBanner';
@@ -10,12 +13,52 @@ import AgendaView from './components/AgendaView';
 import AlunosView from './components/AlunosView';
 import RelatoriosView from './components/RelatoriosView';
 import ConfigView from './components/ConfigView';
+import AuthView from './components/AuthView';
+import ResetPasswordView from './components/ResetPasswordView';
 import { Logo } from './components/Logo';
 
 export default function App() {
+  const [session, setSession] = useState<Session | null | 'loading'>('loading');
+  const [isRecovery, setIsRecovery] = useState(false);
   const [data, setData] = useState<AppData>(() => loadData());
   const [view, setView] = useState<ViewName>('agenda');
   const [forceAlert, setForceAlert] = useState(false);
+  const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
+
+  // Aplica o tema escolhido e, no modo "sistema", reage à troca do SO.
+  useEffect(() => {
+    applyTheme(themePref);
+    if (themePref !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => applyTheme('system');
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [themePref]);
+
+  function changeTheme(pref: ThemePref) {
+    setThemePrefState(pref);
+    setThemePref(pref);
+  }
+
+  // Sessão do Supabase: carrega a atual e escuta mudanças (login/logout/recovery).
+  useEffect(() => {
+    // Sem credenciais configuradas, libera o app direto (modo offline/dev).
+    if (!isSupabaseConfigured) {
+      setSession(null);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsRecovery(event === 'PASSWORD_RECOVERY');
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     saveData(data);
@@ -127,6 +170,22 @@ export default function App() {
     });
   }
 
+  // Carregando a sessão inicial do Supabase.
+  if (session === 'loading') {
+    return (
+      <div className="min-h-screen min-h-[100dvh] bg-base-bg flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Fluxo de redefinição de senha (link do e-mail).
+  if (isRecovery) return <ResetPasswordView />;
+
+  // Rotas privadas: com Supabase configurado, exige login. Sem configuração,
+  // o app abre direto (modo offline/dev), sem trancar o acesso.
+  if (isSupabaseConfigured && !session) return <AuthView />;
+
   return (
     <div className="min-h-screen min-h-[100dvh] bg-base-bg flex lg:flex-row">
       <div className="no-print">
@@ -159,6 +218,8 @@ export default function App() {
               setData={setData}
               pendingToday={pendingToday}
               onTestNotification={() => setForceAlert(true)}
+              themePref={themePref}
+              onChangeTheme={changeTheme}
             />
           )}
         </main>

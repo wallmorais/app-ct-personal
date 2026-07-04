@@ -185,7 +185,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         <button
           onClick={() => setViewMode('dia')}
           className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            viewMode === 'dia' ? 'bg-emerald text-black' : 'text-base-muted active:bg-white/5'
+            viewMode === 'dia' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
           }`}
         >
           <Clock size={15} />
@@ -197,7 +197,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             setViewMode('mes');
           }}
           className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            viewMode === 'mes' ? 'bg-emerald text-black' : 'text-base-muted active:bg-white/5'
+            viewMode === 'mes' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
           }`}
         >
           <CalendarRange size={15} />
@@ -224,7 +224,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             <button
               onClick={() => setSelectedDate((d) => addDays(d, -7))}
               aria-label="Semana anterior"
-              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-white/5"
+              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
             >
               <ChevronLeft size={18} />
             </button>
@@ -237,7 +237,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             <button
               onClick={() => setSelectedDate((d) => addDays(d, 7))}
               aria-label="Próxima semana"
-              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-white/5"
+              className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
             >
               <ChevronRight size={18} />
             </button>
@@ -251,7 +251,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                 className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${
                   active
                     ? 'bg-emerald text-black border-emerald'
-                    : 'bg-base-surface text-base-muted border-base-border active:bg-white/5'
+                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
                 }`}
               >
                 <span>{DIA_LABELS[dow]}</span>
@@ -267,8 +267,10 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
           </div>
 
           {cards.length === 0 && (
-            <div className="text-center py-16 text-base-muted text-sm">
-              Nenhuma aula agendada para este dia.
+            <div className="text-center py-16 space-y-2">
+              <CalendarRange size={36} className="mx-auto text-base-muted opacity-30" aria-hidden="true" />
+              <p className="text-base-muted text-sm font-medium">Nenhuma aula para este dia</p>
+              <p className="text-xs text-base-muted/60">Selecione outro dia ou cadastre alunos com horários.</p>
             </div>
           )}
 
@@ -295,7 +297,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="font-medium text-sm truncate">{aluno.nome}</p>
-                              <span className="text-[10px] font-semibold uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                              <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                                 Reposição
                               </span>
                             </div>
@@ -303,7 +305,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                               Origem: {formatDateLabel(registro.data)} às {registro.horario}
                             </p>
                             {status === 'falta' && registro.faltaObservacao && (
-                              <p className="text-[11px] text-red-400 mt-0.5">
+                              <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
                                 Obs.: {registro.faltaObservacao}
                               </p>
                             )}
@@ -326,7 +328,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                               className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                                 status === 'falta'
                                   ? 'bg-red-500 text-white'
-                                  : 'bg-red-500/10 text-red-400 active:bg-red-500/20'
+                                  : 'bg-red-500/10 text-red-600 dark:text-red-400 active:bg-red-500/20'
                               }`}
                             >
                               <X size={18} strokeWidth={2.5} />
@@ -334,7 +336,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             <button
                               aria-label="Reagendar reposição"
                               onClick={() => handleReagendar(registro)}
-                              className="w-9 h-9 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-400 active:bg-amber-500/20"
+                              className="w-9 h-9 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-600 dark:text-amber-400 active:bg-amber-500/20"
                             >
                               <RotateCw size={18} strokeWidth={2.5} />
                             </button>
@@ -352,13 +354,13 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                         <div className="min-w-0">
                           <p className="font-medium text-sm truncate">{aluno.nome}</p>
                           {status === 'reposicao' && item.registro?.reposicaoData && (
-                            <p className="text-[11px] text-amber-400 mt-0.5">
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
                               Reposição agendada: {formatDateLabel(item.registro.reposicaoData)} às{' '}
                               {item.registro.reposicaoHorario}
                             </p>
                           )}
                           {status === 'falta' && item.registro?.faltaObservacao && (
-                            <p className="text-[11px] text-red-400 mt-0.5">
+                            <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
                               Obs.: {item.registro.faltaObservacao}
                             </p>
                           )}
@@ -381,7 +383,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                               status === 'falta'
                                 ? 'bg-red-500 text-white'
-                                : 'bg-red-500/10 text-red-400 active:bg-red-500/20'
+                                : 'bg-red-500/10 text-red-600 dark:text-red-400 active:bg-red-500/20'
                             }`}
                           >
                             <X size={18} strokeWidth={2.5} />
@@ -392,7 +394,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                               status === 'reposicao'
                                 ? 'bg-amber-500 text-black'
-                                : 'bg-amber-500/10 text-amber-400 active:bg-amber-500/20'
+                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 active:bg-amber-500/20'
                             }`}
                           >
                             <RotateCw size={18} strokeWidth={2.5} />

@@ -16,7 +16,7 @@ export default function BottomNav({ view, onChange }: Props) {
             <button
               key={key}
               onClick={() => onChange(key)}
-              className="flex flex-col items-center justify-center gap-1 py-2.5 active:bg-white/5 transition-colors"
+              className="flex flex-col items-center justify-center gap-1 py-2.5 active:bg-base-hover/5 transition-colors"
             >
               <Icon
                 size={22}

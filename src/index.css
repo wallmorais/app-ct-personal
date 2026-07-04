@@ -2,8 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ====== Temas (claro/escuro) ======
+   As variáveis são tripletos RGB consumidos pelo Tailwind via
+   rgb(var(--x) / <alpha-value>). A classe .dark é aplicada em <html>
+   pelo gerenciador de tema (src/lib/theme.ts). */
+:root {
+  --color-bg: 247 249 248;       /* #F7F9F8 */
+  --color-surface: 255 255 255;  /* #FFFFFF */
+  --color-card: 255 255 255;     /* #FFFFFF */
+  --color-border: 222 228 226;   /* #DEE4E2 */
+  --color-muted: 90 104 100;     /* #5A6864 */
+  --color-fg: 11 17 16;          /* #0B1110 */
+  --color-hover: 0 0 0;          /* overlay preto p/ hover no claro */
+  --color-accent: 13 116 119;    /* #0D7477 teal mais escuro p/ contraste no claro */
+  color-scheme: light;
+}
+
+.dark {
+  --color-bg: 11 15 14;          /* #0B0F0E */
+  --color-surface: 18 24 22;     /* #121816 */
+  --color-card: 23 31 29;        /* #171F1D */
+  --color-border: 38 48 45;      /* #26302D */
+  --color-muted: 138 154 149;    /* #8A9A95 */
+  --color-fg: 255 255 255;       /* #FFFFFF */
+  --color-hover: 255 255 255;    /* overlay branco p/ hover no escuro */
+  --color-accent: 21 169 173;    /* #15A9AD teal da marca */
+  color-scheme: dark;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Anel de foco acessível: visível só com navegação por teclado (focus-visible). */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-accent) / 1);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Inputs já têm borda de foco via Tailwind (focus:border-emerald);
+   remove o outline padrão para evitar duplo indicador. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 html {
@@ -17,7 +60,7 @@ html, body, #root {
 }
 
 body {
-  @apply bg-base-bg text-white;
+  @apply bg-base-bg text-base-fg;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   /* Evita o "pulo"/bounce do Safari e o atraso de toque do iOS */
   overscroll-behavior-y: none;
@@ -27,7 +70,7 @@ body {
 
 /* text-base (16px) evita o zoom automático do iOS ao focar um campo */
 input, textarea, select {
-  @apply bg-base-surface border border-base-border rounded-xl px-3 py-2.5 text-white text-base w-full outline-none focus:border-emerald transition-colors;
+  @apply bg-base-surface border border-base-border rounded-xl px-3 py-2.5 text-base-fg text-base w-full outline-none focus:border-emerald transition-colors;
   /* Evita que inputs (ex.: type="date") empurrem o grid/flex para fora da
      tela em celulares com largura reduzida. */
   min-width: 0;
@@ -46,11 +89,14 @@ input[type="checkbox"], input[type="radio"] {
   height: 18px;
 }
 
-/* Ícone do seletor de data legível no tema escuro */
+/* Ícone do seletor de data: invertido só no tema escuro (claro usa o padrão). */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85);
   opacity: 0.85;
   cursor: pointer;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {

@@ -124,7 +124,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
       <div className="w-full max-w-md bg-base-card border border-base-border rounded-t-3xl sm:rounded-3xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold">{isEdit ? 'Editar aluno' : 'Novo aluno'}</h2>
-          <button onClick={onClose} className="text-base-muted active:text-white">
+          <button onClick={onClose} className="text-base-muted active:text-base-fg">
             <X size={20} />
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
               aria-describedby={nomeErro ? 'aluno-nome-erro' : undefined}
             />
             {nomeErro && (
-              <p id="aluno-nome-erro" className="text-xs text-red-400 mt-1">
+              <p id="aluno-nome-erro" className="text-xs text-red-600 dark:text-red-400 mt-1">
                 Informe o nome do aluno.
               </p>
             )}
@@ -223,7 +223,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
                         onChange={() => toggleDia(d.value)}
                         className="accent-electric"
                       />
-                      <span className="text-sm font-semibold text-white">{d.label}</span>
+                      <span className="text-sm font-semibold text-base-fg">{d.label}</span>
                     </label>
 
                     {item.ativo && (
@@ -251,7 +251,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
                           </div>
                         </div>
                         {invalido && (
-                          <p className="text-xs text-red-400 mt-1.5">
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1.5">
                             O término deve ser depois do início.
                           </p>
                         )}
@@ -269,7 +269,7 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
             <button
               onClick={() => setConfirmandoExclusao(true)}
               aria-label="Excluir aluno"
-              className="w-12 h-12 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center active:bg-red-500/20"
+              className="w-12 h-12 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center active:bg-red-500/20"
             >
               <Trash2 size={18} />
             </button>

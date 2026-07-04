@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User } from 'lucide-react';
+import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { AppData } from '../types';
+import type { ThemePref } from '../lib/theme';
 import {
   exportData,
   importData,
@@ -25,7 +27,15 @@ interface Props {
   setData: Dispatch<SetStateAction<AppData>>;
   pendingToday: number;
   onTestNotification: () => void;
+  themePref: ThemePref;
+  onChangeTheme: (pref: ThemePref) => void;
 }
+
+const TEMA_OPCOES: { value: ThemePref; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Claro', icon: Sun },
+  { value: 'dark', label: 'Escuro', icon: Moon },
+  { value: 'system', label: 'Sistema', icon: Monitor },
+];
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR');
@@ -35,7 +45,14 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString('pt-BR');
 }
 
-export default function ConfigView({ data, setData, pendingToday, onTestNotification }: Props) {
+export default function ConfigView({
+  data,
+  setData,
+  pendingToday,
+  onTestNotification,
+  themePref,
+  onChangeTheme,
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [permission, setPermission] = useState<NotificationPermissionState>(() =>
     getNotificationPermission(),
@@ -99,6 +116,38 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
     <div className="space-y-5">
       <h2 className="text-lg font-bold">Configurações</h2>
 
+      {/* ============ APARÊNCIA ============ */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2 text-electric">
+          <Sun size={18} />
+          <h3 className="text-sm font-semibold">Aparência</h3>
+        </div>
+        <p className="text-xs text-base-muted">
+          Escolha o tema do aplicativo. "Sistema" acompanha a configuração do seu dispositivo.
+        </p>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tema do aplicativo">
+          {TEMA_OPCOES.map(({ value, label, icon: Icon }) => {
+            const ativo = themePref === value;
+            return (
+              <button
+                key={value}
+                role="radio"
+                aria-checked={ativo}
+                onClick={() => onChangeTheme(value)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-semibold transition-colors ${
+                  ativo
+                    ? 'bg-emerald/10 border-emerald text-emerald'
+                    : 'bg-base-surface border-base-border text-base-muted active:bg-base-hover/5'
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* ============ PERFIL PROFISSIONAL ============ */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-electric">
@@ -160,7 +209,7 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
         </div>
 
         <div className="bg-base-surface border border-base-border rounded-xl px-3 py-2.5 text-xs text-base-muted">
-          Hoje há <span className="font-semibold text-white">{pendingToday}</span>{' '}
+          Hoje há <span className="font-semibold text-base-fg">{pendingToday}</span>{' '}
           {pendingToday === 1 ? 'aula' : 'aulas'} sem check-in.
         </div>
 
@@ -177,7 +226,7 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
         ) : (
           <button
             onClick={handleEnableNotifications}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-white/5"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-base-hover/5"
           >
             <Bell size={16} />
             Ativar notificações do sistema
@@ -201,12 +250,12 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
         </div>
         <p className="text-xs text-base-muted">
           A cada 15 dias o app guarda automaticamente uma cópia dos seus dados. Próximo backup previsto:{' '}
-          <span className="font-semibold text-white">{formatDate(proximoBackup)}</span>.
+          <span className="font-semibold text-base-fg">{formatDate(proximoBackup)}</span>.
         </p>
 
         <button
           onClick={handleManualBackup}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-white/5"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-base-hover/5"
         >
           <Archive size={16} />
           Gerar backup agora
@@ -228,14 +277,14 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
                 <button
                   onClick={() => downloadBackup(b)}
                   aria-label="Baixar backup"
-                  className="w-9 h-9 rounded-lg bg-base-card text-electric flex items-center justify-center active:bg-white/5 shrink-0"
+                  className="w-9 h-9 rounded-lg bg-base-card text-electric flex items-center justify-center active:bg-base-hover/5 shrink-0"
                 >
                   <HardDriveDownload size={16} />
                 </button>
                 <button
                   onClick={() => setBackupParaExcluir(b.name)}
                   aria-label="Excluir backup"
-                  className="w-9 h-9 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center active:bg-red-500/20 shrink-0"
+                  className="w-9 h-9 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center active:bg-red-500/20 shrink-0"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -262,7 +311,7 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-white/5"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-semibold active:bg-base-hover/5"
         >
           <Upload size={17} />
           Importar backup (JSON)
@@ -275,6 +324,19 @@ export default function ConfigView({ data, setData, pendingToday, onTestNotifica
           onChange={handleImport}
         />
       </section>
+
+      {/* ============ SAIR DA CONTA ============ */}
+      {isSupabaseConfigured && (
+        <section className="bg-base-card border border-base-border rounded-2xl p-4">
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-semibold active:bg-red-500/20"
+          >
+            <LogOut size={17} />
+            Sair da conta
+          </button>
+        </section>
+      )}
 
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
 

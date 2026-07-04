@@ -24,7 +24,7 @@ export default function SidebarNav({ view, onChange }: Props) {
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 active
                   ? 'bg-emerald/10 text-emerald'
-                  : 'text-base-muted hover:bg-white/5 hover:text-white'
+                  : 'text-base-muted hover:bg-base-hover/5 hover:text-base-fg'
               }`}
             >
               <Icon size={19} strokeWidth={active ? 2.5 : 2} />

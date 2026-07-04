@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Plus, ChevronRight, Phone } from 'lucide-react';
+import { Plus, ChevronRight, Phone, Users } from 'lucide-react';
 import type { Aluno, AppData } from '../types';
 import { statsDoAluno, formatBRL } from '../lib/billing';
 import AlunoFormModal, { type AgendaDia } from './AlunoFormModal';
@@ -85,7 +85,15 @@ export default function AlunosView({ data, setData }: Props) {
       </div>
 
       {data.alunos.length === 0 && (
-        <div className="text-center py-16 text-base-muted text-sm">Nenhum aluno cadastrado.</div>
+        <div className="text-center py-16 space-y-3">
+          <div className="w-16 h-16 rounded-full bg-base-surface border border-base-border flex items-center justify-center mx-auto">
+            <Users size={28} className="text-base-muted opacity-50" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-base-muted text-sm font-medium">Nenhum aluno cadastrado</p>
+            <p className="text-xs text-base-muted/70 mt-1">Toque em &ldquo;+ Aluno&rdquo; para começar.</p>
+          </div>
+        </div>
       )}
 
       <div className="space-y-2">
@@ -97,7 +105,7 @@ export default function AlunosView({ data, setData }: Props) {
             <button
               key={aluno.id}
               onClick={() => setEditing(aluno)}
-              className="w-full text-left bg-base-card border border-base-border rounded-2xl p-4 active:bg-white/5 transition-colors"
+              className="w-full text-left bg-base-card border border-base-border rounded-2xl p-4 active:bg-base-hover/5 transition-colors"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">

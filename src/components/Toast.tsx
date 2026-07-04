@@ -25,7 +25,7 @@ export default function Toast({ toast, onDismiss }: Props) {
         role="status"
         className={`flex items-center gap-2 max-w-sm w-full rounded-xl border px-4 py-3 text-sm font-medium shadow-lg backdrop-blur ${
           isError
-            ? 'bg-red-500/15 border-red-500/30 text-red-300'
+            ? 'bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-300'
             : 'bg-emerald/15 border-emerald/30 text-emerald'
         }`}
       >

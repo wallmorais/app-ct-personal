@@ -76,7 +76,9 @@ export function shiftMonth(iso: string, amount: number): string {
 
 export function monthLabel(iso: string): string {
   const date = fromISODate(startOfMonth(iso));
-  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  // Capitaliza somente a primeira letra para evitar "Junho De 2026"
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /**

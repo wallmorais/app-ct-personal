@@ -17,14 +17,14 @@ export default function FaltaModal({ alunoNome, initialObservacao, onConfirm, on
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center">
-              <X size={18} className="text-red-400" />
+              <X size={18} className="text-red-600 dark:text-red-400" />
             </div>
             <div>
               <h2 className="text-base font-semibold">Marcar falta</h2>
               <p className="text-xs text-base-muted">{alunoNome}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-base-muted active:text-white">
+          <button onClick={onClose} className="text-base-muted active:text-base-fg">
             <X size={20} />
           </button>
         </div>
@@ -43,7 +43,7 @@ export default function FaltaModal({ alunoNome, initialObservacao, onConfirm, on
         <div className="flex gap-3 mt-5">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-medium active:bg-white/5"
+            className="flex-1 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-medium active:bg-base-hover/5"
           >
             Cancelar
           </button>

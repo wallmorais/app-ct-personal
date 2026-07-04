@@ -23,8 +23,8 @@ type Situacao = 'Presença' | 'Falta' | 'Substituição' | 'Pendente';
 
 const SITUACAO_COLOR: Record<Situacao, string> = {
   Presença: 'text-emerald',
-  Falta: 'text-red-400',
-  Substituição: 'text-amber-400',
+  Falta: 'text-red-600 dark:text-red-400',
+  Substituição: 'text-amber-600 dark:text-amber-400',
   Pendente: 'text-base-muted',
 };
 
@@ -89,7 +89,7 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
         <span className="shrink-0">{formatDateLabel(entry.data)}</span>
         <span className="text-base-muted shrink-0">{entry.horario}</span>
         {isReagendamento && (
-          <span className="text-[10px] font-semibold uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+          <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
             Substituição
           </span>
         )}
@@ -102,12 +102,12 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
           </p>
         )}
         {!isReagendamento && entry.reagendadoPara && (
-          <p className="text-[11px] text-amber-400 mt-0.5">
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
             → Substituição em {formatDateLabel(entry.reagendadoPara.data)} às {entry.reagendadoPara.horario}
           </p>
         )}
         {entry.status === 'falta' && entry.faltaObservacao && (
-          <p className="text-[11px] text-red-400 mt-0.5">Obs.: {entry.faltaObservacao}</p>
+          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Obs.: {entry.faltaObservacao}</p>
         )}
       </div>
     </div>
@@ -394,7 +394,7 @@ export default function RelatoriosView({ data }: Props) {
                 className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
                   active
                     ? 'bg-emerald text-black border-emerald'
-                    : 'bg-base-surface text-base-muted border-base-border active:bg-white/5'
+                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
                 }`}
               >
                 {monthLabel(startOfMonth(preset.start))}
@@ -449,7 +449,7 @@ export default function RelatoriosView({ data }: Props) {
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
                   active
                     ? 'bg-emerald text-black border-emerald'
-                    : 'bg-base-surface text-base-muted border-base-border active:bg-white/5'
+                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
                 }`}
               >
                 {active && <Check size={13} strokeWidth={3} />}
@@ -537,12 +537,12 @@ export default function RelatoriosView({ data }: Props) {
               <p className="text-[11px] text-base-muted">Presenças</p>
             </div>
             <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
-              <XCircle size={18} className="text-red-400 mx-auto mb-1" />
+              <XCircle size={18} className="text-red-600 dark:text-red-400 mx-auto mb-1" />
               <p className="text-xl font-bold tabular-nums">{stats.totalFaltas}</p>
               <p className="text-[11px] text-base-muted">Faltas</p>
             </div>
             <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
-              <RotateCw size={18} className="text-amber-400 mx-auto mb-1" />
+              <RotateCw size={18} className="text-amber-600 dark:text-amber-400 mx-auto mb-1" />
               <p className="text-xl font-bold tabular-nums">{stats.totalReposicoes}</p>
               <p className="text-[11px] text-base-muted">Substituições</p>
             </div>
@@ -570,8 +570,8 @@ export default function RelatoriosView({ data }: Props) {
                       {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
                     </span>
                     <span className="flex items-center gap-2.5">
-                      <span className="text-red-400">{s.faltas} faltas</span>
-                      <span className="text-amber-400">{s.reposicoes} subst.</span>
+                      <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
                     </span>
                   </div>
                 </div>
@@ -592,8 +592,8 @@ export default function RelatoriosView({ data }: Props) {
               <p className="text-3xl font-bold tabular-nums">{formatBRL(totalSelecionados.faturamento)}</p>
               <div className="flex items-center gap-3 text-xs text-base-muted mt-2">
                 <span>{totalSelecionados.presencas} presenças</span>
-                <span className="text-red-400">{totalSelecionados.faltas} faltas</span>
-                <span className="text-amber-400">{totalSelecionados.reposicoes} subst.</span>
+                <span className="text-red-600 dark:text-red-400">{totalSelecionados.faltas} faltas</span>
+                <span className="text-amber-600 dark:text-amber-400">{totalSelecionados.reposicoes} subst.</span>
               </div>
             </div>
           )}
@@ -620,8 +620,8 @@ export default function RelatoriosView({ data }: Props) {
                       {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
                     </span>
                     <span className="flex items-center gap-2.5">
-                      <span className="text-red-400">{s.faltas} faltas</span>
-                      <span className="text-amber-400">{s.reposicoes} subst.</span>
+                      <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
                     </span>
                   </div>
                 </div>

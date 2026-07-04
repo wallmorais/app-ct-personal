@@ -33,15 +33,15 @@ export default function MonthlyCalendar({ data, monthCursor, selectedDate, onCha
         <button
           onClick={() => onChangeMonth('prev')}
           aria-label="Mês anterior"
-          className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-white/5"
+          className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
         >
           <ChevronLeft size={18} />
         </button>
-        <p className="text-sm font-semibold capitalize">{monthLabel(monthCursor)}</p>
+        <p className="text-sm font-semibold">{monthLabel(monthCursor)}</p>
         <button
           onClick={() => onChangeMonth('next')}
           aria-label="Próximo mês"
-          className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-white/5"
+          className="w-9 h-9 rounded-full bg-base-surface border border-base-border flex items-center justify-center active:bg-base-hover/5"
         >
           <ChevronRight size={18} />
         </button>
@@ -69,8 +69,8 @@ export default function MonthlyCalendar({ data, monthCursor, selectedDate, onCha
                 isSelected
                   ? 'bg-emerald text-black border-emerald'
                   : isToday
-                  ? 'bg-base-surface border-emerald text-white'
-                  : 'bg-base-surface border-base-border text-white active:bg-white/5'
+                  ? 'bg-base-surface border-emerald text-base-fg'
+                  : 'bg-base-surface border-base-border text-base-fg active:bg-base-hover/5'
               } ${!isCurrentMonth ? 'opacity-30' : ''}`}
             >
               <span>{dayNum}</span>

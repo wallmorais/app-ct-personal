@@ -34,7 +34,7 @@ export default function ReposicaoModal({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center">
-              <RotateCw size={18} className="text-amber-400" />
+              <RotateCw size={18} className="text-amber-600 dark:text-amber-400" />
             </div>
             <div>
               <h2 className="text-base font-semibold">
@@ -43,7 +43,7 @@ export default function ReposicaoModal({
               <p className="text-xs text-base-muted">{alunoNome}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-base-muted active:text-white">
+          <button onClick={onClose} className="text-base-muted active:text-base-fg">
             <X size={20} />
           </button>
         </div>
@@ -68,7 +68,7 @@ export default function ReposicaoModal({
             />
           </div>
           {mesmaDataHorarioOrigem && (
-            <p className="text-xs text-red-400">
+            <p className="text-xs text-red-600 dark:text-red-400">
               A reposição precisa ser em uma data ou horário diferente da aula original.
             </p>
           )}
@@ -79,14 +79,14 @@ export default function ReposicaoModal({
             <button
               onClick={onRemove}
               aria-label="Remover reposição"
-              className="w-12 h-12 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center active:bg-red-500/20"
+              className="w-12 h-12 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center active:bg-red-500/20"
             >
               <Trash2 size={18} />
             </button>
           )}
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-medium active:bg-white/5"
+            className="flex-1 py-3 rounded-xl bg-base-surface border border-base-border text-sm font-medium active:bg-base-hover/5"
           >
             Cancelar
           </button>
