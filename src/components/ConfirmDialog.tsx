@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
 interface Props {
   title: string;
@@ -12,9 +12,14 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Excluir'
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-5">
       <div className="w-full max-w-sm bg-base-card border border-base-border rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-          <AlertTriangle size={18} />
-          <h2 className="text-base font-semibold text-base-fg">{title}</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+            <AlertTriangle size={18} />
+            <h2 className="text-base font-semibold text-base-fg">{title}</h2>
+          </div>
+          <button onClick={onCancel} className="text-base-muted active:text-base-fg" aria-label="Fechar">
+            <X size={20} />
+          </button>
         </div>
         <p className="text-sm text-base-muted">{message}</p>
         <div className="flex gap-3">

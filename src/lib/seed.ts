@@ -53,6 +53,9 @@ export function buildSeedData(): AppData {
     alunos,
     slots,
     registros: [],
+    pagamentos: [],
+    feriasProfessor: [],
+    matriculas: [],
     config: {
       notificationTime: '21:00',
       nomeProfissional: 'Wal Morais',

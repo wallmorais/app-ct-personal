@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check } from 'lucide-react';
-import type { AppData } from '../types';
+import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, DollarSign, AlertTriangle } from 'lucide-react';
+import type { AppData, Pagamento, StatusPagamento } from '../types';
+import { monthKeyOf, todayISO } from '../lib/date';
 import {
   overviewStats,
   historicoDoAluno,
@@ -16,6 +17,7 @@ import { Logo } from './Logo';
 
 interface Props {
   data: AppData;
+  setData: React.Dispatch<React.SetStateAction<AppData>>;
 }
 
 
@@ -265,11 +267,56 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
   );
 }
 
-export default function RelatoriosView({ data }: Props) {
+const STATUS_PAGAMENTO_LABEL: Record<StatusPagamento, string> = {
+  pago: 'Pago',
+  pendente: 'Pendente',
+  atrasado: 'Atrasado',
+};
+
+const STATUS_PAGAMENTO_CLASS: Record<StatusPagamento, string> = {
+  pago: 'text-emerald bg-emerald/10 border-emerald/40',
+  pendente: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
+  atrasado: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30',
+};
+
+export default function RelatoriosView({ data, setData }: Props) {
   const nomeProfissional = data.config.nomeProfissional;
   const registroProfissional = data.config.registroProfissional;
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
+
+  function getPagamento(alunoId: string, mes: string): Pagamento | undefined {
+    return data.pagamentos.find((p) => p.alunoId === alunoId && p.mes === mes);
+  }
+
+  function togglePagamento(alunoId: string, mes: string, valor: number) {
+    setData((prev) => {
+      const existing = prev.pagamentos.find((p) => p.alunoId === alunoId && p.mes === mes);
+      if (existing) {
+        const nextStatus: StatusPagamento =
+          existing.status === 'pago' ? 'pendente' :
+          existing.status === 'pendente' ? 'atrasado' : 'pago';
+        return {
+          ...prev,
+          pagamentos: prev.pagamentos.map((p) =>
+            p.alunoId === alunoId && p.mes === mes
+              ? { ...p, status: nextStatus, dataPagamento: nextStatus === 'pago' ? todayISO() : undefined }
+              : p,
+          ),
+        };
+      }
+      return {
+        ...prev,
+        pagamentos: [...prev.pagamentos, {
+          alunoId,
+          mes,
+          status: 'pago' as StatusPagamento,
+          dataPagamento: todayISO(),
+          valor,
+        }],
+      };
+    });
+  }
 
   const stats = useMemo(() => overviewStats(data, range), [data, range]);
   const emitidoEm = useMemo(() => new Date().toLocaleString('pt-BR'), []);
@@ -551,31 +598,49 @@ export default function RelatoriosView({ data }: Props) {
           <div>
             <h3 className="text-sm font-semibold text-base-muted mb-2 px-1">Por aluno</h3>
             <div className="space-y-2">
-              {stats.porAluno.map((s) => (
-                <div key={s.aluno.id} className="bg-base-card border border-base-border rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-semibold">{s.aluno.nome}</p>
-                    <p className="font-bold text-emerald tabular-nums">{formatBRL(s.faturamento)}</p>
-                  </div>
+              {stats.porAluno.map((s) => {
+                const mes = monthKeyOf(range.start);
+                const pag = getPagamento(s.aluno.id, mes);
+                const pagStatus: StatusPagamento = pag?.status ?? 'pendente';
+                return (
+                  <div key={s.aluno.id} className="bg-base-card border border-base-border rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold">{s.aluno.nome}</p>
+                      <p className="font-bold text-emerald tabular-nums">{formatBRL(s.faturamento)}</p>
+                    </div>
 
-                  <div className="h-1.5 rounded-full bg-base-surface overflow-hidden mb-2">
-                    <div
-                      className="h-full bg-electric rounded-full transition-all"
-                      style={{ width: `${Math.min(s.taxaPresenca, 100)}%` }}
-                    />
-                  </div>
+                    <div className="h-1.5 rounded-full bg-base-surface overflow-hidden mb-2">
+                      <div
+                        className="h-full bg-electric rounded-full transition-all"
+                        style={{ width: `${Math.min(s.taxaPresenca, 100)}%` }}
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-between text-xs text-base-muted">
-                    <span>
-                      {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
-                    </span>
-                    <span className="flex items-center gap-2.5">
-                      <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
-                      <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
-                    </span>
+                    <div className="flex items-center justify-between text-xs text-base-muted">
+                      <span>
+                        {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
+                      </span>
+                      <span className="flex items-center gap-2.5">
+                        <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
+                        <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
+                      </span>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-base-border flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-base-muted">
+                        <DollarSign size={13} />
+                        <span>Pagamento</span>
+                      </div>
+                      <button
+                        onClick={() => togglePagamento(s.aluno.id, mes, s.faturamento)}
+                        className={`text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border transition-colors ${STATUS_PAGAMENTO_CLASS[pagStatus]}`}
+                      >
+                        {STATUS_PAGAMENTO_LABEL[pagStatus]}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

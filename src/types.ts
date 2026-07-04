@@ -5,6 +5,20 @@ export interface Aluno {
   plano: number; // nº de aulas contratadas no mês
   valorAula: number; // valor por aula em R$
   observacoes: string;
+  aniversario?: string; // YYYY-MM-DD
+  objetivo?: string; // ex: "Emagrecimento", "Hipertrofia"
+  restricoes?: string; // restrições médicas
+  dataAdesao?: string; // YYYY-MM-DD — aluno só aparece na agenda a partir desta data
+}
+
+export type StatusPagamento = 'pendente' | 'pago' | 'atrasado';
+
+export interface Pagamento {
+  alunoId: string;
+  mes: string; // YYYY-MM
+  status: StatusPagamento;
+  dataPagamento?: string; // YYYY-MM-DD
+  valor: number;
 }
 
 /** 0 = Domingo ... 6 = Sábado (compatível com Date.getDay()) */
@@ -33,10 +47,36 @@ export interface Registro {
   faltaObservacao?: string;
 }
 
+export interface FeriasPeriodo {
+  inicio: string; // YYYY-MM-DD
+  fim: string; // YYYY-MM-DD
+}
+
+export interface ProfessorVacation {
+  id: string;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim: string; // YYYY-MM-DD
+  observacao?: string;
+  createdAt: string; // ISO
+}
+
+export type StudentStatus = 'ATIVO' | 'FERIAS' | 'INATIVO';
+
+export interface StudentEnrollment {
+  id: string;
+  alunoId: string;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim?: string; // YYYY-MM-DD (null = período em aberto)
+  tipo: StudentStatus;
+  observacao?: string;
+  createdAt: string; // ISO
+}
+
 export interface ConfigData {
   notificationTime: string; // "HH:MM"
   nomeProfissional: string;
   registroProfissional: string;
+  ferias?: FeriasPeriodo; // legado — mantido para migração
 }
 
 export interface AppData {
@@ -44,6 +84,9 @@ export interface AppData {
   slots: AulaSlot[];
   registros: Registro[];
   config: ConfigData;
+  pagamentos: Pagamento[];
+  feriasProfessor: ProfessorVacation[];
+  matriculas: StudentEnrollment[];
 }
 
-export type ViewName = 'agenda' | 'alunos' | 'relatorios' | 'config';
+export type ViewName = 'hoje' | 'reposicoes' | 'alunos' | 'relatorios' | 'config';

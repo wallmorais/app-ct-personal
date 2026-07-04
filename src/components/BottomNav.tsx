@@ -9,7 +9,7 @@ interface Props {
 export default function BottomNav({ view, onChange }: Props) {
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-base-surface/95 backdrop-blur border-t border-base-border pb-[env(safe-area-inset-bottom)]">
-      <div className="grid grid-cols-4 max-w-md sm:max-w-2xl mx-auto">
+      <div className="grid grid-cols-5 max-w-md sm:max-w-2xl mx-auto">
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
           const active = view === key;
           return (

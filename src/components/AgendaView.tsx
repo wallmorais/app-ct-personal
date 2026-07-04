@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, X, RotateCw, ChevronLeft, ChevronRight, CalendarRange, AlertTriangle } from 'lucide-react';
+import { Check, X, RotateCw, ChevronLeft, ChevronRight, CalendarRange, AlertTriangle, CheckCheck, Palmtree } from 'lucide-react';
 import type { AppData, AulaSlot, Registro, StatusAula } from '../types';
 import {
   ORDEM_SEMANA,
@@ -13,6 +13,7 @@ import {
   shiftMonth,
   todayISO,
 } from '../lib/date';
+import { isProfessorOnVacation, isStudentActiveOnDate, isStudentOnVacation } from '../lib/periods';
 import ReposicaoModal from './ReposicaoModal';
 import FaltaModal from './FaltaModal';
 import MonthlyCalendar from './MonthlyCalendar';
@@ -111,6 +112,8 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [faltaModalState, setFaltaModalState] = useState<FaltaModalState | null>(null);
 
+  const isFerias = useMemo(() => isProfessorOnVacation(data, selectedDate), [data, selectedDate]);
+
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
 
   const weekDays = useMemo(() => {
@@ -129,6 +132,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     for (const slot of data.slots) {
       if (!slot.dias.includes(dow)) continue;
       for (const alunoId of slot.alunoIds) {
+        if (!isStudentActiveOnDate(data, alunoId, selectedDate) && !isStudentOnVacation(data, alunoId, selectedDate)) continue;
         const registro = data.registros.find(
           (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
         );
@@ -322,6 +326,19 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
           {/* Data selecionada */}
           <p className="text-sm font-semibold text-base-muted px-1">{formatDateLabel(selectedDate)}</p>
 
+          {/* Banner de férias */}
+          {isFerias && (
+            <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/25 rounded-2xl px-4 py-3">
+              <Palmtree size={20} className="text-blue-500 dark:text-blue-400 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Férias</p>
+                <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                  Aulas deste dia não são contabilizadas como faltas.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Stats do dia */}
           <div className="grid grid-cols-4 gap-2">
             <StatCard label="Aulas de hoje" value={stats.total} />
@@ -330,8 +347,28 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
             <StatCard label="Repos." value={stats.reposPendentes} color="amber" />
           </div>
 
+          {/* Botão confirmar todas */}
+          {!isFerias && stats.pendentes > 0 && (
+            <button
+              onClick={() => {
+                for (const { horario, item } of flatCards) {
+                  const s = item.registro?.status ?? 'pendente';
+                  if (s === 'pendente') {
+                    if (item.kind === 'regular') {
+                      onUpdateRegistro(item.alunoId, item.slot.id, selectedDate, horario, 'presente');
+                    }
+                  }
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald/10 border border-emerald/30 text-emerald text-sm font-semibold active:bg-emerald/20 transition-colors"
+            >
+              <CheckCheck size={18} strokeWidth={2.5} />
+              Marcar todas como presente ({stats.pendentes})
+            </button>
+          )}
+
           {/* Alerta de pendentes */}
-          {stats.pendentes > 0 && (
+          {!isFerias && stats.pendentes > 0 && (
             <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3">
               <AlertTriangle size={18} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
               <p className="text-sm text-red-700 dark:text-red-400 font-medium">

@@ -15,9 +15,36 @@ export function loadData(): AppData {
     if (!parsed.alunos || !parsed.slots || !parsed.registros || !parsed.config) {
       throw new Error('formato inválido');
     }
-    // Migração: garante campos novos de config para dados salvos em versões anteriores.
     parsed.config.nomeProfissional ??= 'Wal Morais';
     parsed.config.registroProfissional ??= 'Personal Trainer';
+    parsed.pagamentos ??= [];
+    parsed.feriasProfessor ??= [];
+    parsed.matriculas ??= [];
+
+    // Migração: ferias única → array de períodos
+    if (parsed.config.ferias && parsed.feriasProfessor.length === 0) {
+      parsed.feriasProfessor.push({
+        id: crypto.randomUUID(),
+        dataInicio: parsed.config.ferias.inicio,
+        dataFim: parsed.config.ferias.fim,
+        createdAt: new Date().toISOString(),
+      });
+      parsed.config.ferias = undefined;
+    }
+
+    // Migração: dataAdesao → matrícula ATIVO
+    for (const aluno of parsed.alunos) {
+      if (aluno.dataAdesao && !parsed.matriculas.some((m) => m.alunoId === aluno.id)) {
+        parsed.matriculas.push({
+          id: crypto.randomUUID(),
+          alunoId: aluno.id,
+          dataInicio: aluno.dataAdesao,
+          tipo: 'ATIVO',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
     return parsed;
   } catch {
     const seeded = buildSeedData();

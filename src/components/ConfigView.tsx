@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor } from 'lucide-react';
+import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor, Palmtree, Plus, Pencil } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { AppData } from '../types';
+import type { AppData, ProfessorVacation } from '../types';
 import type { ThemePref } from '../lib/theme';
+import { vacationsOverlap } from '../lib/periods';
 import {
   exportData,
   importData,
@@ -43,6 +44,151 @@ function formatDateTime(iso: string): string {
 
 function formatDate(d: Date): string {
   return d.toLocaleDateString('pt-BR');
+}
+
+function FeriasSection({ data, setData }: { data: AppData; setData: Props['setData'] }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [inicio, setInicio] = useState('');
+  const [fim, setFim] = useState('');
+  const [obs, setObs] = useState('');
+  const [erro, setErro] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const sorted = [...data.feriasProfessor].sort((a, b) => b.dataInicio.localeCompare(a.dataInicio));
+
+  function openNew() {
+    setEditingId(null);
+    setInicio('');
+    setFim('');
+    setObs('');
+    setErro('');
+    setFormOpen(true);
+  }
+
+  function openEdit(v: ProfessorVacation) {
+    setEditingId(v.id);
+    setInicio(v.dataInicio);
+    setFim(v.dataFim);
+    setObs(v.observacao ?? '');
+    setErro('');
+    setFormOpen(true);
+  }
+
+  function handleSave() {
+    if (!inicio || !fim) { setErro('Preencha início e término.'); return; }
+    if (fim < inicio) { setErro('Término deve ser após o início.'); return; }
+    if (vacationsOverlap(data.feriasProfessor, inicio, fim, editingId ?? undefined)) {
+      setErro('Este período sobrepõe férias já cadastradas.');
+      return;
+    }
+
+    setData((prev) => {
+      if (editingId) {
+        return {
+          ...prev,
+          feriasProfessor: prev.feriasProfessor.map((v) =>
+            v.id === editingId ? { ...v, dataInicio: inicio, dataFim: fim, observacao: obs.trim() || undefined } : v,
+          ),
+        };
+      }
+      const newVacation: ProfessorVacation = {
+        id: crypto.randomUUID(),
+        dataInicio: inicio,
+        dataFim: fim,
+        observacao: obs.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      };
+      return { ...prev, feriasProfessor: [...prev.feriasProfessor, newVacation] };
+    });
+    setFormOpen(false);
+  }
+
+  function handleDelete(id: string) {
+    setData((prev) => ({ ...prev, feriasProfessor: prev.feriasProfessor.filter((v) => v.id !== id) }));
+    setConfirmDelete(null);
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso + 'T12:00').toLocaleDateString('pt-BR');
+  }
+
+  return (
+    <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-electric">
+          <Palmtree size={18} />
+          <h3 className="text-sm font-semibold">Férias do Professor</h3>
+        </div>
+        <button onClick={openNew} className="flex items-center gap-1 text-xs font-semibold text-emerald active:opacity-70">
+          <Plus size={14} /> Adicionar
+        </button>
+      </div>
+      <p className="text-xs text-base-muted">
+        Durante férias, a agenda indica visualmente e aulas não geram faltas nem reposições. O histórico é preservado.
+      </p>
+
+      {formOpen && (
+        <div className="bg-base-surface border border-base-border rounded-xl p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="ferias-inicio">Início</label>
+              <input id="ferias-inicio" type="date" value={inicio} onChange={(e) => { setInicio(e.target.value); setErro(''); }} />
+            </div>
+            <div>
+              <label htmlFor="ferias-fim">Término</label>
+              <input id="ferias-fim" type="date" value={fim} min={inicio} onChange={(e) => { setFim(e.target.value); setErro(''); }} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="ferias-obs">Observação (opcional)</label>
+            <input id="ferias-obs" type="text" value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex: Viagem, descanso..." />
+          </div>
+          {erro && <p className="text-xs text-red-600 dark:text-red-400">{erro}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => setFormOpen(false)} className="flex-1 py-2 rounded-xl bg-base-card border border-base-border text-xs font-semibold active:bg-base-hover/5">
+              Cancelar
+            </button>
+            <button onClick={handleSave} className="flex-1 py-2 rounded-xl bg-emerald text-black text-xs font-semibold active:bg-emerald/80">
+              Salvar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sorted.length === 0 && !formOpen && (
+        <p className="text-xs text-base-muted text-center py-2">Nenhum período de férias cadastrado.</p>
+      )}
+
+      {sorted.map((v) => (
+        <div key={v.id} className="flex items-center justify-between bg-blue-500/10 border border-blue-500/25 rounded-xl px-3 py-2.5">
+          <div>
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+              {fmtDate(v.dataInicio)} a {fmtDate(v.dataFim)}
+            </p>
+            {v.observacao && <p className="text-[11px] text-blue-600/70 dark:text-blue-400/70">{v.observacao}</p>}
+          </div>
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            <button onClick={() => openEdit(v)} className="w-7 h-7 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400 active:bg-blue-500/20" aria-label="Editar">
+              <Pencil size={13} />
+            </button>
+            <button onClick={() => setConfirmDelete(v.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-500 active:bg-red-500/20" aria-label="Excluir">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir período de férias"
+          message="Deseja excluir este período de férias? Isso afetará apenas a contabilização futura."
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => handleDelete(confirmDelete)}
+        />
+      )}
+    </section>
+  );
 }
 
 export default function ConfigView({
@@ -188,6 +334,9 @@ export default function ConfigView({
           />
         </div>
       </section>
+
+      {/* ============ FÉRIAS DO PROFESSOR ============ */}
+      <FeriasSection data={data} setData={setData} />
 
       {/* ============ LEMBRETE DIÁRIO ============ */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">

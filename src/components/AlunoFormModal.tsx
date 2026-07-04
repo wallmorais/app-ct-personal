@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Trash2, CalendarClock } from 'lucide-react';
-import type { Aluno, AulaSlot, DiaSemana } from '../types';
+import type { Aluno, AulaSlot, DiaSemana, StudentEnrollment } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 
 interface Props {
@@ -61,6 +61,10 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
   const [plano, setPlano] = useState(aluno?.plano ?? 8);
   const [valorAula, setValorAula] = useState(aluno?.valorAula ?? 100);
   const [observacoes, setObservacoes] = useState(aluno?.observacoes ?? '');
+  const [aniversario, setAniversario] = useState(aluno?.aniversario ?? '');
+  const [objetivo, setObjetivo] = useState(aluno?.objetivo ?? '');
+  const [restricoes, setRestricoes] = useState(aluno?.restricoes ?? '');
+  const [dataAdesao, setDataAdesao] = useState(aluno?.dataAdesao ?? '');
   const [agenda, setAgenda] = useState<AgendaState>(() => buildInitialAgenda(aluno, slots));
   const [nomeErro, setNomeErro] = useState(false);
   const [horarioErro, setHorarioErro] = useState(false);
@@ -114,6 +118,10 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
         plano: Number(plano) || 0,
         valorAula: Number(valorAula) || 0,
         observacoes: observacoes.trim(),
+        aniversario: aniversario || undefined,
+        objetivo: objetivo.trim() || undefined,
+        restricoes: restricoes.trim() || undefined,
+        dataAdesao: dataAdesao || undefined,
       },
       agendaSelecionada,
     );
@@ -185,13 +193,54 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
             </div>
           </div>
           <div>
+            <label htmlFor="aluno-adesao">Data de adesão</label>
+            <input
+              id="aluno-adesao"
+              type="date"
+              value={dataAdesao}
+              onChange={(e) => setDataAdesao(e.target.value)}
+            />
+            <p className="text-[11px] text-base-muted mt-1">
+              O aluno aparece na agenda somente a partir desta data.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="aluno-aniversario">Aniversário</label>
+            <input
+              id="aluno-aniversario"
+              type="date"
+              value={aniversario}
+              onChange={(e) => setAniversario(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="aluno-objetivo">Objetivo</label>
+            <input
+              id="aluno-objetivo"
+              type="text"
+              value={objetivo}
+              onChange={(e) => setObjetivo(e.target.value)}
+              placeholder="Ex: Emagrecimento, Hipertrofia, Condicionamento"
+            />
+          </div>
+          <div>
+            <label htmlFor="aluno-restricoes">Restrições médicas</label>
+            <textarea
+              id="aluno-restricoes"
+              rows={2}
+              value={restricoes}
+              onChange={(e) => setRestricoes(e.target.value)}
+              placeholder="Lesões, condições médicas, limitações..."
+            />
+          </div>
+          <div>
             <label htmlFor="aluno-obs">Observações</label>
             <textarea
               id="aluno-obs"
-              rows={3}
+              rows={2}
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Restrições, objetivos, etc."
+              placeholder="Notas gerais sobre o aluno"
             />
           </div>
 

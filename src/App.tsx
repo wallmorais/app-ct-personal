@@ -4,12 +4,14 @@ import type { AppData, StatusAula, ViewName } from './types';
 import { loadData, saveData, runScheduledBackup } from './lib/storage';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
+import { isProfessorOnVacation, isStudentActiveOnDate } from './lib/periods';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { getThemePref, applyTheme, setThemePref, type ThemePref } from './lib/theme';
 import BottomNav from './components/BottomNav';
 import SidebarNav from './components/SidebarNav';
 import AlertBanner from './components/AlertBanner';
 import AgendaView from './components/AgendaView';
+import ReposicoesView from './components/ReposicoesView';
 import AlunosView from './components/AlunosView';
 import RelatoriosView from './components/RelatoriosView';
 import ConfigView from './components/ConfigView';
@@ -21,7 +23,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null | 'loading'>('loading');
   const [isRecovery, setIsRecovery] = useState(false);
   const [data, setData] = useState<AppData>(() => loadData());
-  const [view, setView] = useState<ViewName>('agenda');
+  const [view, setView] = useState<ViewName>('hoje');
   const [forceAlert, setForceAlert] = useState(false);
   const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
 
@@ -76,10 +78,12 @@ export default function App() {
   const pendingToday = useMemo(() => {
     const dow = todayDow();
     const today = todayISO();
+    if (isProfessorOnVacation(data, today)) return 0;
     let count = 0;
     for (const slot of data.slots) {
       if (!slot.dias.includes(dow)) continue;
       for (const alunoId of slot.alunoIds) {
+        if (!isStudentActiveOnDate(data, alunoId, today)) continue;
         const reg = data.registros.find(
           (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === today,
         );
@@ -209,9 +213,10 @@ export default function App() {
         )}
 
         <main className="flex-1 px-[max(1rem,env(safe-area-inset-left))] pt-4 lg:pt-8 pb-28 lg:pb-10 max-w-md sm:max-w-2xl lg:max-w-4xl w-full mx-auto">
-          {view === 'agenda' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
+          {view === 'hoje' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
+          {view === 'reposicoes' && <ReposicoesView data={data} onUpdateRegistro={updateRegistro} />}
           {view === 'alunos' && <AlunosView data={data} setData={setData} />}
-          {view === 'relatorios' && <RelatoriosView data={data} />}
+          {view === 'relatorios' && <RelatoriosView data={data} setData={setData} />}
           {view === 'config' && (
             <ConfigView
               data={data}
