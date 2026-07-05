@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, DollarSign, AlertTriangle } from 'lucide-react';
+import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, DollarSign, AlertTriangle, History, Palmtree, UserPlus, UserMinus, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { AppData, Pagamento, StatusPagamento } from '../types';
-import { monthKeyOf, todayISO } from '../lib/date';
+import { monthKeyOf, todayISO, formatDateLabel, monthLabel, startOfMonth, shiftMonth, addDays } from '../lib/date';
+import { getEnrollmentsForStudent, getVacationsInRange } from '../lib/periods';
 import {
   overviewStats,
   historicoDoAluno,
@@ -12,7 +13,6 @@ import {
   type HistoricoEntry,
   type DateRange,
 } from '../lib/billing';
-import { formatDateLabel, monthLabel, startOfMonth } from '../lib/date';
 import { Logo } from './Logo';
 
 interface Props {
@@ -279,9 +279,12 @@ const STATUS_PAGAMENTO_CLASS: Record<StatusPagamento, string> = {
   atrasado: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30',
 };
 
+type ReportMode = 'financeiro' | 'historico';
+
 export default function RelatoriosView({ data, setData }: Props) {
   const nomeProfissional = data.config.nomeProfissional;
   const registroProfissional = data.config.registroProfissional;
+  const [reportMode, setReportMode] = useState<ReportMode>('financeiro');
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
 
@@ -374,6 +377,24 @@ export default function RelatoriosView({ data, setData }: Props) {
 
   const mostrarAlunoNoHistorico = modoGeral || statsFiltrados.length > 1;
 
+  const feriasProfessorNoPeriodo = useMemo(
+    () => getVacationsInRange(data, range.start, range.end),
+    [data, range],
+  );
+
+  const feriasAlunosNoPeriodo = useMemo(() => {
+    return data.alunos
+      .map((aluno) => ({
+        aluno,
+        periodos: getEnrollmentsForStudent(data, aluno.id).filter(
+          (e) => e.tipo === 'FERIAS' && e.dataInicio <= range.end && (!e.dataFim || e.dataFim >= range.start),
+        ),
+      }))
+      .filter((x) => x.periodos.length > 0);
+  }, [data, range]);
+
+  const temFeriasNoPeriodo = feriasProfessorNoPeriodo.length > 0 || feriasAlunosNoPeriodo.length > 0;
+
   return (
     <div id="relatorio-print" className="space-y-5">
       {/* Cabeçalho do documento — só na impressão */}
@@ -419,58 +440,65 @@ export default function RelatoriosView({ data, setData }: Props) {
           <h2 className="text-lg font-bold">Relatório</h2>
           <p className="text-sm text-base-muted">{formatPeriodo(range)}</p>
         </div>
+        {reportMode === 'financeiro' && (
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
+          >
+            <FileDown size={16} strokeWidth={2.5} />
+            Gerar PDF
+          </button>
+        )}
+      </div>
+
+      {/* Toggle Financeiro / Histórico */}
+      <div className="no-print grid grid-cols-2 gap-2 bg-base-surface border border-base-border rounded-xl p-1">
         <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
+          onClick={() => setReportMode('financeiro')}
+          className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            reportMode === 'financeiro' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
+          }`}
         >
-          <FileDown size={16} strokeWidth={2.5} />
-          Gerar PDF
+          <TrendingUp size={15} />
+          Financeiro
+        </button>
+        <button
+          onClick={() => setReportMode('historico')}
+          className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            reportMode === 'historico' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
+          }`}
+        >
+          <History size={15} />
+          Histórico
         </button>
       </div>
 
-      {/* Filtro de período — só na tela */}
-      <div className="no-print space-y-2">
-        <label className="!mb-0 px-1">Período do relatório</label>
-        <div className="grid grid-cols-2 gap-2">
-          {[currentMonthRange(), previousMonthRange()].map((preset, i) => {
-            const active = range.start === preset.start && range.end === preset.end;
-            return (
-              <button
-                key={i}
-                onClick={() => setRange(preset)}
-                className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
-                  active
-                    ? 'bg-emerald text-black border-emerald'
-                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
-                }`}
-              >
-                {monthLabel(startOfMonth(preset.start))}
-              </button>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="relatorio-data-inicial" className="!mb-1">Data inicial</label>
-            <input
-              id="relatorio-data-inicial"
-              type="date"
-              value={range.start}
-              max={range.end}
-              onChange={(e) => handleRangeChange('start', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="relatorio-data-final" className="!mb-1">Data final</label>
-            <input
-              id="relatorio-data-final"
-              type="date"
-              value={range.end}
-              min={range.start}
-              onChange={(e) => handleRangeChange('end', e.target.value)}
-            />
-          </div>
-        </div>
+      {/* ═══════════ MODO FINANCEIRO ═══════════ */}
+      {reportMode === 'financeiro' && <>
+
+      {/* Navegação por mês — só na tela */}
+      <div className="no-print flex items-center justify-between">
+        <button
+          onClick={() => {
+            const prev = shiftMonth(range.start, -1);
+            setRange({ start: prev, end: addDays(shiftMonth(prev, 1), -1) });
+          }}
+          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+        >
+          <ChevronLeft size={16} />
+          Anterior
+        </button>
+        <span className="text-sm font-bold">{monthLabel(startOfMonth(range.start))}</span>
+        <button
+          onClick={() => {
+            const next = shiftMonth(range.start, 1);
+            setRange({ start: next, end: addDays(shiftMonth(next, 1), -1) });
+          }}
+          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+        >
+          Próximo
+          <ChevronRight size={16} />
+        </button>
       </div>
 
       {/* Filtro de alunos — só na tela */}
@@ -545,6 +573,36 @@ export default function RelatoriosView({ data, setData }: Props) {
           <ConsolidadoTable lista={listaAtiva} />
         </div>
 
+        {/* Férias no período */}
+        {temFeriasNoPeriodo && (
+          <div className="avoid-break" style={{ marginTop: 20 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Férias no Período</h3>
+            {feriasAlunosNoPeriodo.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Férias dos Alunos</p>
+                {feriasAlunosNoPeriodo.map(({ aluno, periodos }) => (
+                  <p key={aluno.id} style={{ fontSize: 11, marginBottom: 2 }}>
+                    <strong>{aluno.nome}:</strong>{' '}
+                    {periodos
+                      .map((p) => `${formatDateFull(p.dataInicio)} até ${p.dataFim ? formatDateFull(p.dataFim) : '—'}`)
+                      .join(' · ')}
+                  </p>
+                ))}
+              </div>
+            )}
+            {feriasProfessorNoPeriodo.length > 0 && (
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Férias do Professor</p>
+                {feriasProfessorNoPeriodo.map((v) => (
+                  <p key={v.id} style={{ fontSize: 11, marginBottom: 2 }}>
+                    {formatDateFull(v.dataInicio)} até {formatDateFull(v.dataFim)}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Histórico completo de agendamentos */}
         <HistoricoTable entries={historicoDetalhado} mostrarAluno={mostrarAlunoNoHistorico} />
 
@@ -594,6 +652,47 @@ export default function RelatoriosView({ data, setData }: Props) {
               <p className="text-[11px] text-base-muted">Substituições</p>
             </div>
           </div>
+
+          {temFeriasNoPeriodo && (
+            <div className="space-y-3">
+              {feriasAlunosNoPeriodo.length > 0 && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
+                    <Palmtree size={16} />
+                    <span className="text-sm font-semibold">Férias dos Alunos</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {feriasAlunosNoPeriodo.map(({ aluno, periodos }) => (
+                      <div key={aluno.id} className="flex items-center justify-between text-sm">
+                        <span className="font-medium">{aluno.nome}</span>
+                        <span className="text-xs text-base-muted">
+                          {periodos
+                            .map((p) => `${formatDateFull(p.dataInicio)} até ${p.dataFim ? formatDateFull(p.dataFim) : '—'}`)
+                            .join(' · ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {feriasProfessorNoPeriodo.length > 0 && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
+                    <Palmtree size={16} />
+                    <span className="text-sm font-semibold">Férias do Professor</span>
+                  </div>
+                  <div className="space-y-1">
+                    {feriasProfessorNoPeriodo.map((v) => (
+                      <p key={v.id} className="text-sm">
+                        {formatDateFull(v.dataInicio)} até {formatDateFull(v.dataFim)}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <h3 className="text-sm font-semibold text-base-muted mb-2 px-1">Por aluno</h3>
@@ -703,6 +802,168 @@ export default function RelatoriosView({ data, setData }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      </>}
+
+      {/* ═══════════ MODO HISTÓRICO ═══════════ */}
+      {reportMode === 'historico' && (
+        <HistoricoTimeline data={data} />
+      )}
+    </div>
+  );
+}
+
+type HistoricoFilter = 'todos' | 'professor' | string;
+
+interface TimelineEvent {
+  date: string;
+  label: string;
+  icon: 'adesao' | 'encerramento' | 'ferias_inicio' | 'ferias_fim' | 'reativacao';
+  entity: string;
+}
+
+const TIMELINE_ICON_CLASS = {
+  adesao: 'bg-emerald/20 text-emerald',
+  reativacao: 'bg-emerald/20 text-emerald',
+  encerramento: 'bg-red-500/20 text-red-500',
+  ferias_inicio: 'bg-blue-500/20 text-blue-500',
+  ferias_fim: 'bg-blue-500/20 text-blue-500',
+};
+
+function HistoricoTimeline({ data }: { data: AppData }) {
+  const [filter, setFilter] = useState<HistoricoFilter>('todos');
+  const [month, setMonth] = useState(() => startOfMonth(todayISO()));
+
+  const monthStart = month;
+  const monthEnd = addDays(shiftMonth(month, 1), -1);
+
+  const events = useMemo(() => {
+    const result: TimelineEvent[] = [];
+
+    // Professor vacations
+    if (filter === 'todos' || filter === 'professor') {
+      for (const v of data.feriasProfessor ?? []) {
+        result.push({ date: v.dataInicio, label: 'Início das férias', icon: 'ferias_inicio', entity: 'Professor' });
+        result.push({ date: v.dataFim, label: 'Fim das férias', icon: 'ferias_fim', entity: 'Professor' });
+      }
+    }
+
+    // Student enrollments
+    const students = filter === 'professor' ? [] : filter === 'todos' ? data.alunos : data.alunos.filter((a) => a.id === filter);
+    for (const aluno of students) {
+      const enrollments = getEnrollmentsForStudent(data, aluno.id);
+      for (const e of enrollments) {
+        if (e.tipo === 'ATIVO') {
+          const isFirst = enrollments.indexOf(e) === 0;
+          result.push({
+            date: e.dataInicio,
+            label: isFirst ? 'Aluno cadastrado' : 'Contrato reativado',
+            icon: isFirst ? 'adesao' : 'reativacao',
+            entity: aluno.nome,
+          });
+          if (e.dataFim) {
+            result.push({ date: e.dataFim, label: 'Contrato encerrado', icon: 'encerramento', entity: aluno.nome });
+          }
+        } else if (e.tipo === 'FERIAS') {
+          result.push({ date: e.dataInicio, label: 'Início das férias', icon: 'ferias_inicio', entity: aluno.nome });
+          if (e.dataFim) {
+            result.push({ date: e.dataFim, label: 'Fim das férias', icon: 'ferias_fim', entity: aluno.nome });
+          }
+        } else if (e.tipo === 'INATIVO') {
+          result.push({ date: e.dataInicio, label: 'Contrato encerrado', icon: 'encerramento', entity: aluno.nome });
+        }
+      }
+
+      // Legacy: if no enrollments but has dataAdesao
+      if (enrollments.length === 0 && aluno.dataAdesao) {
+        result.push({ date: aluno.dataAdesao, label: 'Aluno cadastrado', icon: 'adesao', entity: aluno.nome });
+      }
+    }
+
+    return result
+      .filter((ev) => ev.date >= monthStart && ev.date <= monthEnd)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [data, filter, monthStart, monthEnd]);
+
+  function fmtDate(iso: string) {
+    return new Date(iso + 'T12:00').toLocaleDateString('pt-BR');
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Navegação por mês */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setMonth(shiftMonth(month, -1))}
+          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+        >
+          <ChevronLeft size={16} />
+          Anterior
+        </button>
+        <span className="text-sm font-bold">{monthLabel(month)}</span>
+        <button
+          onClick={() => setMonth(shiftMonth(month, 1))}
+          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+        >
+          Próximo
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {/* Filtro */}
+      <div className="space-y-2">
+        <label className="!mb-0 px-1">Filtrar por</label>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'todos' as const, label: 'Todos' },
+            { id: 'professor' as const, label: 'Professor' },
+            ...data.alunos.map((a) => ({ id: a.id, label: a.nome })),
+          ].map((opt) => {
+            const active = filter === opt.id;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setFilter(opt.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                  active
+                    ? 'bg-emerald text-black border-emerald'
+                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
+                }`}
+              >
+                {active && <Check size={13} strokeWidth={3} />}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      {events.length === 0 ? (
+        <div className="text-center py-12 space-y-2">
+          <History size={28} className="mx-auto text-base-muted opacity-30" />
+          <p className="text-base-muted text-sm">Nenhum evento registrado.</p>
+        </div>
+      ) : (
+        <div className="relative pl-6">
+          <div className="absolute left-[11px] top-2 bottom-2 w-px bg-base-border" />
+          {events.map((ev, i) => (
+            <div key={`${ev.date}-${ev.entity}-${ev.label}-${i}`} className="relative flex gap-3 pb-4">
+              <div className={`absolute left-[-13px] w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${TIMELINE_ICON_CLASS[ev.icon]}`}>
+                {ev.icon === 'adesao' && <UserPlus size={12} />}
+                {ev.icon === 'reativacao' && <RefreshCw size={12} />}
+                {ev.icon === 'encerramento' && <UserMinus size={12} />}
+                {(ev.icon === 'ferias_inicio' || ev.icon === 'ferias_fim') && <Palmtree size={12} />}
+              </div>
+              <div className="ml-3 min-w-0">
+                <p className="text-xs text-base-muted">{fmtDate(ev.date)}</p>
+                <p className="text-sm font-semibold">{ev.label}</p>
+                <p className="text-xs text-base-muted">{ev.entity}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

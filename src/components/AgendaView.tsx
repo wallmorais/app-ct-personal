@@ -36,6 +36,7 @@ interface AgendaItem {
   slot: AulaSlot;
   kind: 'regular' | 'reposicao';
   registro?: Registro;
+  emFerias?: boolean;
 }
 
 interface FlatCard {
@@ -132,11 +133,12 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     for (const slot of data.slots) {
       if (!slot.dias.includes(dow)) continue;
       for (const alunoId of slot.alunoIds) {
-        if (!isStudentActiveOnDate(data, alunoId, selectedDate) && !isStudentOnVacation(data, alunoId, selectedDate)) continue;
+        const emFerias = isStudentOnVacation(data, alunoId, selectedDate);
+        if (!isStudentActiveOnDate(data, alunoId, selectedDate) && !emFerias) continue;
         const registro = data.registros.find(
           (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
         );
-        result.push({ horario: slot.horario, item: { alunoId, slot, kind: 'regular', registro } });
+        result.push({ horario: slot.horario, item: { alunoId, slot, kind: 'regular', registro, emFerias } });
       }
     }
 
@@ -155,14 +157,14 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
   // Stats do dia selecionado
   const stats = useMemo(() => {
-    let presentes = 0, faltas = 0, reposPendentes = 0;
+    let presentes = 0, faltas = 0, reposPendentes = 0, pendentes = 0;
     for (const { item } of flatCards) {
       const s = item.registro?.status ?? 'pendente';
       if (s === 'presente') presentes++;
       else if (s === 'falta') faltas++;
       else if (s === 'reposicao') reposPendentes++;
+      else if (!item.emFerias) pendentes++;
     }
-    const pendentes = flatCards.length - presentes - faltas - reposPendentes;
     return { total: flatCards.length, presentes, faltas, reposPendentes, pendentes };
   }, [flatCards]);
 
@@ -353,7 +355,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
               onClick={() => {
                 for (const { horario, item } of flatCards) {
                   const s = item.registro?.status ?? 'pendente';
-                  if (s === 'pendente') {
+                  if (s === 'pendente' && !item.emFerias) {
                     if (item.kind === 'regular') {
                       onUpdateRegistro(item.alunoId, item.slot.id, selectedDate, horario, 'presente');
                     }
@@ -477,7 +479,15 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                       <span className="text-sm font-bold tabular-nums">{horario}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-base">{aluno.nome}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-base">{aluno.nome}</p>
+                        {item.emFerias && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                            <Palmtree size={11} />
+                            Férias
+                          </span>
+                        )}
+                      </div>
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${STATUS_BADGE[status]}`}>
                         {STATUS_LABEL[status]}
                       </span>
@@ -495,6 +505,12 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                   </div>
 
                   {/* Botões de ação */}
+                  {item.emFerias ? (
+                    <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-medium text-blue-600/80 dark:text-blue-400/80">
+                      <Palmtree size={13} />
+                      Aluno em férias — sem ações disponíveis
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       aria-label="Presença confirmada"
@@ -533,6 +549,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                       Falta
                     </button>
                   </div>
+                  )}
                 </div>
               );
             })}

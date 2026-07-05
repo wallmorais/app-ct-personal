@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Plus, ChevronRight, Phone, Users, Search, MessageCircle, Cake, Target, AlertCircle, CalendarClock } from 'lucide-react';
-import type { Aluno, AppData, StudentEnrollment, StudentStatus } from '../types';
-import { getEnrollmentsForStudent, getStudentStatusOnDate } from '../lib/periods';
+import { Plus, ChevronRight, Phone, Users, Search, MessageCircle, Cake, Target, AlertCircle } from 'lucide-react';
+import type { Aluno, AppData } from '../types';
+import { getEnrollmentsForStudent } from '../lib/periods';
 import { statsDoAluno, formatBRL, registrosNoPeriodo } from '../lib/billing';
 import { addDays, todayISO, formatDateShort, formatDateLabel } from '../lib/date';
 import AlunoFormModal, { type AgendaDia } from './AlunoFormModal';
@@ -18,18 +18,10 @@ function formatWhatsAppUrl(telefone: string): string {
   return `https://wa.me/${num}`;
 }
 
-const STATUS_LABEL: Record<StudentStatus, string> = { ATIVO: 'Ativo', FERIAS: 'Férias', INATIVO: 'Inativo' };
-const STATUS_CLASS: Record<StudentStatus, string> = {
-  ATIVO: 'text-emerald bg-emerald/10 border-emerald/40',
-  FERIAS: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30',
-  INATIVO: 'text-base-muted bg-base-surface border-base-border',
-};
-
 export default function AlunosView({ data, setData }: Props) {
   const [editing, setEditing] = useState<Aluno | null | 'new'>(null);
   const [busca, setBusca] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [statusAction, setStatusAction] = useState<{ alunoId: string; tipo: StudentStatus } | null>(null);
 
   const alunoStats = useMemo(
     () => new Map(data.alunos.map((a) => [a.id, statsDoAluno(a, data.registros)])),
@@ -65,7 +57,7 @@ export default function AlunosView({ data, setData }: Props) {
     );
   }, [data.alunos, busca]);
 
-  function handleSave(aluno: Aluno, agenda: AgendaDia[]) {
+  function handleSave(aluno: Aluno, agenda: AgendaDia[], vacations: { id: string; dataInicio: string; dataFim: string }[]) {
     setData((prev) => {
       const exists = prev.alunos.some((a) => a.id === aluno.id);
       const alunos = exists
@@ -100,18 +92,48 @@ export default function AlunosView({ data, setData }: Props) {
         }
       }
 
-      // Se é novo aluno ou dataAdesao mudou, garante matrícula ATIVO
-      let matriculas = prev.matriculas;
-      const hasEnrollment = matriculas.some((m) => m.alunoId === aluno.id);
-      if (!hasEnrollment) {
-        const startDate = aluno.dataAdesao || todayISO();
-        matriculas = [...matriculas, {
+      // Rebuild enrollments from contract dates + vacations
+      const now = new Date().toISOString();
+      let matriculas = (prev.matriculas ?? []).filter((m) => m.alunoId !== aluno.id);
+
+      if (aluno.dataAdesao) {
+        matriculas.push({
           id: crypto.randomUUID(),
           alunoId: aluno.id,
-          dataInicio: startDate,
-          tipo: 'ATIVO' as const,
-          createdAt: new Date().toISOString(),
-        }];
+          dataInicio: aluno.dataAdesao,
+          dataFim: aluno.dataEncerramento,
+          tipo: 'ATIVO',
+          createdAt: now,
+        });
+      } else if (!matriculas.some((m) => m.alunoId === aluno.id)) {
+        matriculas.push({
+          id: crypto.randomUUID(),
+          alunoId: aluno.id,
+          dataInicio: todayISO(),
+          tipo: 'ATIVO',
+          createdAt: now,
+        });
+      }
+
+      for (const v of vacations) {
+        matriculas.push({
+          id: v.id,
+          alunoId: aluno.id,
+          dataInicio: v.dataInicio,
+          dataFim: v.dataFim,
+          tipo: 'FERIAS',
+          createdAt: now,
+        });
+      }
+
+      if (aluno.dataEncerramento) {
+        matriculas.push({
+          id: crypto.randomUUID(),
+          alunoId: aluno.id,
+          dataInicio: aluno.dataEncerramento,
+          tipo: 'INATIVO',
+          createdAt: now,
+        });
       }
 
       return { ...prev, alunos, slots, matriculas };
@@ -129,25 +151,6 @@ export default function AlunosView({ data, setData }: Props) {
     setEditing(null);
   }
 
-  function changeStudentStatus(alunoId: string, novoTipo: StudentStatus) {
-    const today = todayISO();
-    setData((prev) => {
-      const openEnrollments = prev.matriculas
-        .filter((m) => m.alunoId === alunoId && !m.dataFim)
-        .map((m) => ({ ...m, dataFim: today }));
-      const closed = prev.matriculas.map((m) =>
-        openEnrollments.find((o) => o.id === m.id) ?? m,
-      );
-      const newEnrollment: StudentEnrollment = {
-        id: crypto.randomUUID(),
-        alunoId,
-        dataInicio: today,
-        tipo: novoTipo,
-        createdAt: new Date().toISOString(),
-      };
-      return { ...prev, matriculas: [...closed, newEnrollment] };
-    });
-  }
 
   return (
     <div className="space-y-4">
@@ -327,6 +330,13 @@ export default function AlunosView({ data, setData }: Props) {
         <AlunoFormModal
           aluno={editing === 'new' ? null : editing}
           slots={data.slots}
+          studentVacations={
+            editing !== 'new'
+              ? getEnrollmentsForStudent(data, editing.id)
+                  .filter((e) => e.tipo === 'FERIAS' && e.dataFim)
+                  .map((e) => ({ id: e.id, dataInicio: e.dataInicio, dataFim: e.dataFim! }))
+              : []
+          }
           onSave={handleSave}
           onDelete={editing !== 'new' ? handleDelete : undefined}
           onClose={() => setEditing(null)}

@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import { X, Trash2, CalendarClock } from 'lucide-react';
+import { X, Trash2, CalendarClock, FileText, Palmtree, Plus } from 'lucide-react';
 import type { Aluno, AulaSlot, DiaSemana, StudentEnrollment } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+
+interface StudentVacation {
+  id: string;
+  dataInicio: string;
+  dataFim: string;
+}
 
 interface Props {
   aluno: Aluno | null;
   slots: AulaSlot[];
-  onSave: (aluno: Aluno, agenda: AgendaDia[]) => void;
+  studentVacations: StudentVacation[];
+  onSave: (aluno: Aluno, agenda: AgendaDia[], vacations: StudentVacation[]) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
 }
@@ -55,7 +62,7 @@ function buildInitialAgenda(aluno: Aluno | null, slots: AulaSlot[]): AgendaState
   return base;
 }
 
-export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose }: Props) {
+export default function AlunoFormModal({ aluno, slots, studentVacations, onSave, onDelete, onClose }: Props) {
   const [nome, setNome] = useState(aluno?.nome ?? '');
   const [telefone, setTelefone] = useState(aluno?.telefone ?? '');
   const [plano, setPlano] = useState(aluno?.plano ?? 8);
@@ -65,6 +72,11 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
   const [objetivo, setObjetivo] = useState(aluno?.objetivo ?? '');
   const [restricoes, setRestricoes] = useState(aluno?.restricoes ?? '');
   const [dataAdesao, setDataAdesao] = useState(aluno?.dataAdesao ?? '');
+  const [dataEncerramento, setDataEncerramento] = useState(aluno?.dataEncerramento ?? '');
+  const [vacations, setVacations] = useState<StudentVacation[]>(studentVacations);
+  const [newVacInicio, setNewVacInicio] = useState('');
+  const [newVacFim, setNewVacFim] = useState('');
+  const [vacFormOpen, setVacFormOpen] = useState(false);
   const [agenda, setAgenda] = useState<AgendaState>(() => buildInitialAgenda(aluno, slots));
   const [nomeErro, setNomeErro] = useState(false);
   const [horarioErro, setHorarioErro] = useState(false);
@@ -110,6 +122,12 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
       fim: agenda[d.value].fim,
     }));
 
+    // Inclui período de férias pendente (preenchido mas não confirmado com "Salvar" da seção)
+    const vacationsFinal =
+      vacFormOpen && newVacInicio && newVacFim && newVacFim >= newVacInicio
+        ? [...vacations, { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim }]
+        : vacations;
+
     onSave(
       {
         id: aluno?.id ?? crypto.randomUUID(),
@@ -122,8 +140,10 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
         objetivo: objetivo.trim() || undefined,
         restricoes: restricoes.trim() || undefined,
         dataAdesao: dataAdesao || undefined,
+        dataEncerramento: dataEncerramento || undefined,
       },
       agendaSelecionada,
+      vacationsFinal,
     );
   }
 
@@ -193,18 +213,6 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
             </div>
           </div>
           <div>
-            <label htmlFor="aluno-adesao">Data de adesão</label>
-            <input
-              id="aluno-adesao"
-              type="date"
-              value={dataAdesao}
-              onChange={(e) => setDataAdesao(e.target.value)}
-            />
-            <p className="text-[11px] text-base-muted mt-1">
-              O aluno aparece na agenda somente a partir desta data.
-            </p>
-          </div>
-          <div>
             <label htmlFor="aluno-aniversario">Aniversário</label>
             <input
               id="aluno-aniversario"
@@ -242,6 +250,109 @@ export default function AlunoFormModal({ aluno, slots, onSave, onDelete, onClose
               onChange={(e) => setObservacoes(e.target.value)}
               placeholder="Notas gerais sobre o aluno"
             />
+          </div>
+
+          {/* ── Contrato ── */}
+          <div className="pt-1">
+            <div className="flex items-center gap-2 text-electric mb-2">
+              <FileText size={16} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Contrato</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="aluno-adesao">Data de adesão</label>
+                <input
+                  id="aluno-adesao"
+                  type="date"
+                  value={dataAdesao}
+                  onChange={(e) => setDataAdesao(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="aluno-encerramento">Data de encerramento</label>
+                <input
+                  id="aluno-encerramento"
+                  type="date"
+                  value={dataEncerramento}
+                  min={dataAdesao}
+                  onChange={(e) => setDataEncerramento(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-base-muted mt-1">
+              O aluno aparece na agenda somente entre estas datas.
+            </p>
+          </div>
+
+          {/* ── Férias do aluno ── */}
+          <div className="pt-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-electric">
+                <Palmtree size={16} />
+                <span className="text-xs font-semibold uppercase tracking-wide">Férias</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setVacFormOpen(true); setNewVacInicio(''); setNewVacFim(''); }}
+                className="flex items-center gap-1 text-xs font-semibold text-emerald active:opacity-70"
+              >
+                <Plus size={13} /> Adicionar
+              </button>
+            </div>
+
+            {vacFormOpen && (
+              <div className="bg-base-surface border border-base-border rounded-xl p-3 space-y-2 mb-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor="vac-inicio">Início</label>
+                    <input id="vac-inicio" type="date" value={newVacInicio} onChange={(e) => setNewVacInicio(e.target.value)} />
+                  </div>
+                  <div>
+                    <label htmlFor="vac-fim">Término</label>
+                    <input id="vac-fim" type="date" value={newVacFim} min={newVacInicio} onChange={(e) => setNewVacFim(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setVacFormOpen(false)} className="flex-1 py-1.5 rounded-lg bg-base-card border border-base-border text-xs font-semibold active:bg-base-hover/5">
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newVacInicio && newVacFim && newVacFim >= newVacInicio) {
+                        setVacations((prev) => [...prev, { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim }]);
+                        setVacFormOpen(false);
+                      }
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-emerald text-black text-xs font-semibold active:bg-emerald/80"
+                  >
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {vacations.length === 0 && !vacFormOpen && (
+              <p className="text-xs text-base-muted text-center py-2">Nenhum período de férias.</p>
+            )}
+
+            {vacations
+              .sort((a, b) => b.dataInicio.localeCompare(a.dataInicio))
+              .map((v) => (
+                <div key={v.id} className="flex items-center justify-between bg-blue-500/10 border border-blue-500/25 rounded-xl px-3 py-2 mb-1.5">
+                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                    {new Date(v.dataInicio + 'T12:00').toLocaleDateString('pt-BR')} a {new Date(v.dataFim + 'T12:00').toLocaleDateString('pt-BR')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setVacations((prev) => prev.filter((x) => x.id !== v.id))}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-red-500 active:bg-red-500/20 shrink-0 ml-2"
+                    aria-label="Remover férias"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
           </div>
 
           <div className="pt-1">

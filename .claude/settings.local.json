@@ -10,7 +10,12 @@
       "Bash(git branch *)",
       "Bash(git push *)",
       "Bash(gh auth *)",
-      "Bash(GH_TOKEN=$\\(gh auth token\\) git push -u origin main)"
+      "Bash(GH_TOKEN=$\\(gh auth token\\) git push -u origin main)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm install *)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc -b)"
     ]
   }
 }

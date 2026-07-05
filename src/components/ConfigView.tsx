@@ -262,43 +262,14 @@ export default function ConfigView({
     <div className="space-y-5">
       <h2 className="text-lg font-bold">Configurações</h2>
 
-      {/* ============ APARÊNCIA ============ */}
-      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-electric">
-          <Sun size={18} />
-          <h3 className="text-sm font-semibold">Aparência</h3>
-        </div>
-        <p className="text-xs text-base-muted">
-          Escolha o tema do aplicativo. "Sistema" acompanha a configuração do seu dispositivo.
-        </p>
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tema do aplicativo">
-          {TEMA_OPCOES.map(({ value, label, icon: Icon }) => {
-            const ativo = themePref === value;
-            return (
-              <button
-                key={value}
-                role="radio"
-                aria-checked={ativo}
-                onClick={() => onChangeTheme(value)}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-semibold transition-colors ${
-                  ativo
-                    ? 'bg-emerald/10 border-emerald text-emerald'
-                    : 'bg-base-surface border-base-border text-base-muted active:bg-base-hover/5'
-                }`}
-              >
-                <Icon size={18} />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      {/* ═══════════ GRUPO: PROFESSOR ═══════════ */}
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-base-muted px-1">Professor</p>
 
-      {/* ============ PERFIL PROFISSIONAL ============ */}
+      {/* Perfil profissional */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-electric">
           <User size={18} />
-          <h3 className="text-sm font-semibold">Perfil profissional</h3>
+          <h3 className="text-sm font-semibold">Dados do professor</h3>
         </div>
         <p className="text-xs text-base-muted">
           Aparece no cabeçalho e na assinatura do relatório em PDF.
@@ -335,10 +306,13 @@ export default function ConfigView({
         </div>
       </section>
 
-      {/* ============ FÉRIAS DO PROFESSOR ============ */}
+      {/* Férias do professor */}
       <FeriasSection data={data} setData={setData} />
 
-      {/* ============ LEMBRETE DIÁRIO ============ */}
+      {/* ═══════════ GRUPO: AGENDA ═══════════ */}
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-base-muted px-1 pt-2">Agenda</p>
+
+      {/* Lembrete diário */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-electric">
           <Bell size={18} />
@@ -362,7 +336,6 @@ export default function ConfigView({
           {pendingToday === 1 ? 'aula' : 'aulas'} sem check-in.
         </div>
 
-        {/* Permissão de notificação do sistema */}
         {permission === 'granted' ? (
           <div className="flex items-center gap-2 text-xs text-emerald">
             <ShieldCheck size={15} />
@@ -391,7 +364,39 @@ export default function ConfigView({
         </button>
       </section>
 
-      {/* ============ BACKUP AUTOMÁTICO ============ */}
+      {/* ═══════════ GRUPO: SISTEMA ═══════════ */}
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-base-muted px-1 pt-2">Sistema</p>
+
+      {/* Aparência */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2 text-electric">
+          <Sun size={18} />
+          <h3 className="text-sm font-semibold">Aparência</h3>
+        </div>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tema do aplicativo">
+          {TEMA_OPCOES.map(({ value, label, icon: Icon }) => {
+            const ativo = themePref === value;
+            return (
+              <button
+                key={value}
+                role="radio"
+                aria-checked={ativo}
+                onClick={() => onChangeTheme(value)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-semibold transition-colors ${
+                  ativo
+                    ? 'bg-emerald/10 border-emerald text-emerald'
+                    : 'bg-base-surface border-base-border text-base-muted active:bg-base-hover/5'
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Backup automático */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-electric">
           <Archive size={18} />
@@ -443,9 +448,12 @@ export default function ConfigView({
         )}
       </section>
 
-      {/* ============ BACKUP MANUAL (EXPORT/IMPORT) ============ */}
+      {/* Exportar / Importar */}
       <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold">Backup manual</h3>
+        <div className="flex items-center gap-2 text-electric">
+          <Download size={18} />
+          <h3 className="text-sm font-semibold">Exportar / Importar</h3>
+        </div>
         <p className="text-xs text-base-muted">
           Exporte para guardar fora do aparelho, ou importe para restaurar / migrar para outro dispositivo.
         </p>
@@ -474,7 +482,7 @@ export default function ConfigView({
         />
       </section>
 
-      {/* ============ SAIR DA CONTA ============ */}
+      {/* Sair da conta */}
       {isSupabaseConfigured && (
         <section className="bg-base-card border border-base-border rounded-2xl p-4">
           <button

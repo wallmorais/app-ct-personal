@@ -9,6 +9,7 @@ export interface Aluno {
   objetivo?: string; // ex: "Emagrecimento", "Hipertrofia"
   restricoes?: string; // restrições médicas
   dataAdesao?: string; // YYYY-MM-DD — aluno só aparece na agenda a partir desta data
+  dataEncerramento?: string; // YYYY-MM-DD — aluno não aparece na agenda após esta data
 }
 
 export type StatusPagamento = 'pendente' | 'pago' | 'atrasado';
