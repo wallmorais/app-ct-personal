@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { AppData, Profile, StatusAula, ViewName } from './types';
-import { loadData, saveData, runScheduledBackup } from './lib/storage';
+import { loadData, saveData, runScheduledBackup, emptyAppData } from './lib/storage';
 import { fetchAppData, persistAppData, fetchProfile } from './lib/supabaseRepo';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
@@ -100,13 +100,7 @@ export default function App() {
         if (remote) {
           setData(remote);
         } else {
-          const local = loadData();
-          const hasLocalData = local.alunos.length > 0 || local.registros.length > 0;
-          if (hasLocalData) {
-            // eslint-disable-next-line no-console
-            console.info('[PT.Control] Supabase vazio — enviando dados locais (migração inicial)');
-            await persistAppData(userId, local);
-          }
+          setData(emptyAppData());
         }
         setRemoteReady(true);
       })

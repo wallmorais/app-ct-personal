@@ -1,14 +1,43 @@
 import type { AppData } from '../types';
 import { buildSeedData } from './seed';
+import { isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEY = 'pt-control:data';
+
+export function emptyAppData(): AppData {
+  return {
+    alunos: [],
+    slots: [],
+    schedules: [],
+    registros: [],
+    pagamentos: [],
+    feriasProfessor: [],
+    matriculas: [],
+    config: {
+      notificationTime: '21:00',
+      nomeProfissional: '',
+      registroProfissional: 'Personal Trainer',
+    },
+  };
+}
+
+/**
+ * Estado inicial quando não há nada no localStorage.
+ * - Com Supabase configurado (produção): base VAZIA. Os dados reais vêm do
+ *   Supabase por usuário; jamais usamos dados de demonstração aqui, senão eles
+ *   contaminariam a conta de cada professor.
+ * - Sem Supabase (offline/dev): usa o seed apenas para demonstração local.
+ */
+function initialData(): AppData {
+  return isSupabaseConfigured ? emptyAppData() : buildSeedData();
+}
 
 export function loadData(): AppData {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    const seeded = buildSeedData();
-    saveData(seeded);
-    return seeded;
+    const initial = initialData();
+    saveData(initial);
+    return initial;
   }
   try {
     const parsed = JSON.parse(raw) as AppData;
@@ -78,9 +107,9 @@ export function loadData(): AppData {
 
     return parsed;
   } catch {
-    const seeded = buildSeedData();
-    saveData(seeded);
-    return seeded;
+    const initial = initialData();
+    saveData(initial);
+    return initial;
   }
 }
 

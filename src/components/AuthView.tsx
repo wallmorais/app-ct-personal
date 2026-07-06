@@ -17,6 +17,7 @@ export default function AuthView() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
 
@@ -98,6 +99,24 @@ export default function AuthView() {
       setErro('Erro de conexão. Verifique sua internet.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resending || !email.trim()) return;
+    setResending(true);
+    setErro('');
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+      if (error) {
+        setErro(traduzErroAuth(error.message));
+      } else {
+        setSucesso('E-mail de confirmação reenviado! Verifique sua caixa de entrada.');
+      }
+    } catch {
+      setErro('Erro de conexão. Verifique sua internet.');
+    } finally {
+      setResending(false);
     }
   }
 
@@ -312,10 +331,22 @@ export default function AuthView() {
               {sucesso && (
                 <div
                   role="status"
-                  className="flex items-start gap-2 text-xs text-emerald bg-emerald/10 border border-emerald/20 rounded-xl px-3 py-2.5"
+                  className="flex flex-col gap-2 text-xs text-emerald bg-emerald/10 border border-emerald/20 rounded-xl px-3 py-2.5"
                 >
-                  <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
-                  <span>{sucesso}</span>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+                    <span>{sucesso}</span>
+                  </div>
+                  {mode === 'signup' && (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resending}
+                      className="self-start text-xs font-semibold text-emerald hover:underline disabled:opacity-50"
+                    >
+                      {resending ? 'Reenviando…' : 'Reenviar e-mail de confirmação'}
+                    </button>
+                  )}
                 </div>
               )}
 
