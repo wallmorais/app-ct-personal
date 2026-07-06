@@ -18,11 +18,20 @@ export function previousMonthRange(): DateRange {
   return { start, end };
 }
 
+export interface ReposicaoStats {
+  pendentes: number;
+  concluidas: number;
+  naoCompareceu: number;
+  canceladas: number;
+  total: number;
+}
+
 export interface AlunoStats {
   aluno: Aluno;
   presencas: number;
   faltas: number;
   reposicoes: number;
+  reposicaoStats: ReposicaoStats;
   totalPlano: number;
   taxaPresenca: number; // 0-100
   faturamento: number;
@@ -44,24 +53,40 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
   const doAluno = registros.filter((r) => r.alunoId === aluno.id);
   const doPeriodo = registrosNoPeriodo(doAluno, range);
 
-  // Presenças regulares: aula realizada na data original sem reposição envolvida
   const presencasRegulares = doPeriodo.filter((r) => r.status === 'presente' && !r.reposicaoData).length;
-  // Reposições confirmadas como realizadas cuja data de reposição cai neste período
   const presencasReposicao = doAluno.filter(
     (r) =>
-      r.status === 'presente' &&
+      r.reposicaoStatus === 'concluida' &&
       !!r.reposicaoData &&
       r.reposicaoData >= range.start &&
       r.reposicaoData <= range.end,
   ).length;
   const presencas = presencasRegulares + presencasReposicao;
 
-  const faltas = doPeriodo.filter((r) => r.status === 'falta' && !r.reposicaoData).length;
-  // Conta reposições pela data em que ocorreram (reposicaoData), não pela data original —
-  // consistente com presencasReposicao e com RN04 (conta mesmo após confirmação).
-  const reposicoes = doAluno.filter(
-    (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
+  const faltasRegulares = doPeriodo.filter((r) => r.status === 'falta' && !r.reposicaoData).length;
+  const faltasReposicao = doAluno.filter(
+    (r) =>
+      r.reposicaoStatus === 'nao_compareceu' &&
+      !!r.reposicaoData &&
+      r.reposicaoData >= range.start &&
+      r.reposicaoData <= range.end,
   ).length;
+  const faltas = faltasRegulares + faltasReposicao;
+
+  const reposicoesNoPeriodo = doAluno.filter(
+    (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
+  );
+  const reposicoes = reposicoesNoPeriodo.length;
+
+  const reposicaoStats: ReposicaoStats = { pendentes: 0, concluidas: 0, naoCompareceu: 0, canceladas: 0, total: reposicoes };
+  for (const r of reposicoesNoPeriodo) {
+    const rs = r.reposicaoStatus ?? 'pendente';
+    if (rs === 'concluida') reposicaoStats.concluidas++;
+    else if (rs === 'nao_compareceu') reposicaoStats.naoCompareceu++;
+    else if (rs === 'cancelada') reposicaoStats.canceladas++;
+    else reposicaoStats.pendentes++;
+  }
+
   const taxaPresenca = aluno.plano > 0 ? Math.round((presencas / aluno.plano) * 100) : 0;
   const faturamento = presencas * aluno.valorAula;
 
@@ -70,6 +95,7 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
     presencas,
     faltas,
     reposicoes,
+    reposicaoStats,
     totalPlano: aluno.plano,
     taxaPresenca,
     faturamento,

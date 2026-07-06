@@ -41,7 +41,7 @@ export default function AlunosView({ data, setData }: Props) {
     );
     const presencas = regs.filter((r) => r.status === 'presente').length;
     const faltas = regs.filter((r) => r.status === 'falta').length;
-    const reposicoes = regs.filter((r) => r.status === 'reposicao').length;
+    const reposicoes = regs.filter((r) => r.reposicaoStatus === 'pendente').length;
     const ultimaFalta = regs
       .filter((r) => r.status === 'falta')
       .sort((a, b) => b.data.localeCompare(a.data))[0];
@@ -64,56 +64,63 @@ export default function AlunosView({ data, setData }: Props) {
         ? prev.alunos.map((a) => (a.id === aluno.id ? aluno : a))
         : [...prev.alunos, aluno];
 
-      let slots = prev.slots
-        .map((s) => ({ ...s, alunoIds: s.alunoIds.filter((id) => id !== aluno.id) }))
-        .filter((s) => s.alunoIds.length > 0);
+      // Remove old schedules for this student
+      let schedules = prev.schedules.filter((s) => s.alunoId !== aluno.id);
 
+      // Group agenda items by horário to find/create slots
+      const byHorario = new Map<string, { dias: number[]; fim: string }>();
       for (const item of agenda) {
-        const existingIdx = slots.findIndex(
-          (s) => s.horario === item.inicio && s.dias.includes(item.dia),
-        );
-        if (existingIdx !== -1) {
-          slots = slots.map((s, i) =>
-            i === existingIdx && !s.alunoIds.includes(aluno.id)
-              ? { ...s, horarioFim: item.fim, alunoIds: [...s.alunoIds, aluno.id] }
-              : s,
-          );
+        const key = item.inicio;
+        const entry = byHorario.get(key);
+        if (entry) {
+          entry.dias.push(item.dia);
         } else {
-          slots = [
-            ...slots,
-            {
-              id: crypto.randomUUID(),
-              horario: item.inicio,
-              horarioFim: item.fim,
-              dias: [item.dia],
-              alunoIds: [aluno.id],
-            },
-          ];
+          byHorario.set(key, { dias: [item.dia], fim: item.fim });
         }
       }
 
-      // Rebuild enrollments from contract dates + vacations
-      const now = new Date().toISOString();
-      let matriculas = (prev.matriculas ?? []).filter((m) => m.alunoId !== aluno.id);
+      let slots = [...prev.slots];
 
-      if (aluno.dataAdesao) {
-        matriculas.push({
+      for (const [horario, { dias, fim }] of byHorario) {
+        // Find an existing slot with this horário
+        let slot = slots.find((s) => s.horario === horario);
+        if (!slot) {
+          slot = { id: crypto.randomUUID(), horario, horarioFim: fim };
+          slots.push(slot);
+        } else if (fim) {
+          slot = { ...slot, horarioFim: fim };
+          slots = slots.map((s) => (s.id === slot!.id ? slot! : s));
+        }
+
+        schedules.push({
           id: crypto.randomUUID(),
           alunoId: aluno.id,
-          dataInicio: aluno.dataAdesao,
-          dataFim: aluno.dataEncerramento,
-          tipo: 'ATIVO',
-          createdAt: now,
-        });
-      } else if (!matriculas.some((m) => m.alunoId === aluno.id)) {
-        matriculas.push({
-          id: crypto.randomUUID(),
-          alunoId: aluno.id,
-          dataInicio: todayISO(),
-          tipo: 'ATIVO',
-          createdAt: now,
+          slotId: slot.id,
+          dias: dias as import('../types').DiaSemana[],
         });
       }
+
+      // Remove orphan slots (no schedules referencing them)
+      const usedSlotIds = new Set(schedules.map((s) => s.slotId));
+      slots = slots.filter((s) => usedSlotIds.has(s.id));
+
+      // Rebuild enrollments from contract dates + vacations.
+      // A única entrada ATIVO deve sempre fechar em dataEncerramento (dataFim);
+      // caso contrário ela nunca expira e mascara o registro INATIVO abaixo.
+      const now = new Date().toISOString();
+      const previousAtivo = (prev.matriculas ?? []).find(
+        (m) => m.alunoId === aluno.id && m.tipo === 'ATIVO',
+      );
+      let matriculas = (prev.matriculas ?? []).filter((m) => m.alunoId !== aluno.id);
+
+      matriculas.push({
+        id: previousAtivo?.id ?? crypto.randomUUID(),
+        alunoId: aluno.id,
+        dataInicio: aluno.dataAdesao || previousAtivo?.dataInicio || todayISO(),
+        dataFim: aluno.dataEncerramento,
+        tipo: 'ATIVO',
+        createdAt: previousAtivo?.createdAt ?? now,
+      });
 
       for (const v of vacations) {
         matriculas.push({
@@ -136,18 +143,24 @@ export default function AlunosView({ data, setData }: Props) {
         });
       }
 
-      return { ...prev, alunos, slots, matriculas };
+      return { ...prev, alunos, slots, schedules, matriculas };
     });
     setEditing(null);
   }
 
   function handleDelete(id: string) {
-    setData((prev) => ({
-      ...prev,
-      alunos: prev.alunos.filter((a) => a.id !== id),
-      slots: prev.slots.map((s) => ({ ...s, alunoIds: s.alunoIds.filter((aid) => aid !== id) })),
-      registros: prev.registros.filter((r) => r.alunoId !== id),
-    }));
+    setData((prev) => {
+      const schedules = prev.schedules.filter((s) => s.alunoId !== id);
+      const usedSlotIds = new Set(schedules.map((s) => s.slotId));
+      return {
+        ...prev,
+        alunos: prev.alunos.filter((a) => a.id !== id),
+        slots: prev.slots.filter((s) => usedSlotIds.has(s.id)),
+        schedules,
+        registros: prev.registros.filter((r) => r.alunoId !== id),
+        matriculas: (prev.matriculas ?? []).filter((m) => m.alunoId !== id),
+      };
+    });
     setEditing(null);
   }
 
@@ -330,6 +343,7 @@ export default function AlunosView({ data, setData }: Props) {
         <AlunoFormModal
           aluno={editing === 'new' ? null : editing}
           slots={data.slots}
+          schedules={data.schedules}
           studentVacations={
             editing !== 'new'
               ? getEnrollmentsForStudent(data, editing.id)

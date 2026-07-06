@@ -33,8 +33,23 @@ export function isStudentOnVacation(data: AppData, alunoId: string, date: string
   return getStudentStatusOnDate(data, alunoId, date) === 'FERIAS';
 }
 
-export function vacationsOverlap(existing: ProfessorVacation[], newStart: string, newEnd: string, excludeId?: string): boolean {
+export interface VacationLike {
+  id: string;
+  dataInicio: string;
+  dataFim: string;
+}
+
+/** Genérica: usada tanto para férias do professor quanto do aluno — mesma regra de interseção de datas. */
+export function vacationsOverlap<T extends VacationLike>(existing: T[], newStart: string, newEnd: string, excludeId?: string): boolean {
   return existing.some((v) => {
+    if (v.id === excludeId) return false;
+    return newStart <= v.dataFim && newEnd >= v.dataInicio;
+  });
+}
+
+/** Retorna o primeiro período conflitante (se houver), para permitir o fluxo de "substituir". */
+export function findOverlappingVacation<T extends VacationLike>(existing: T[], newStart: string, newEnd: string, excludeId?: string): T | undefined {
+  return existing.find((v) => {
     if (v.id === excludeId) return false;
     return newStart <= v.dataFim && newEnd >= v.dataInicio;
   });

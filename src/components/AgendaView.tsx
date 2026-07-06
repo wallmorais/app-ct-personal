@@ -26,7 +26,7 @@ interface Props {
     data: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
   ) => void;
 }
@@ -130,20 +130,23 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     const dow = dowOf(selectedDate);
     const result: FlatCard[] = [];
 
-    for (const slot of data.slots) {
-      if (!slot.dias.includes(dow)) continue;
-      for (const alunoId of slot.alunoIds) {
-        const emFerias = isStudentOnVacation(data, alunoId, selectedDate);
-        if (!isStudentActiveOnDate(data, alunoId, selectedDate) && !emFerias) continue;
-        const registro = data.registros.find(
-          (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
-        );
-        result.push({ horario: slot.horario, item: { alunoId, slot, kind: 'regular', registro, emFerias } });
-      }
+    const slotMap = new Map(data.slots.map((s) => [s.id, s]));
+    for (const schedule of data.schedules) {
+      if (!schedule.dias.includes(dow)) continue;
+      const slot = slotMap.get(schedule.slotId);
+      if (!slot) continue;
+      const alunoId = schedule.alunoId;
+      const emFerias = isStudentOnVacation(data, alunoId, selectedDate);
+      if (!isStudentActiveOnDate(data, alunoId, selectedDate) && !emFerias) continue;
+      const registro = data.registros.find(
+        (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === selectedDate,
+      );
+      result.push({ horario: slot.horario, item: { alunoId, slot, kind: 'regular', registro, emFerias } });
     }
 
     for (const registro of data.registros) {
       if (registro.reposicaoData !== selectedDate || !registro.reposicaoHorario) continue;
+      if (registro.reposicaoStatus && registro.reposicaoStatus !== 'pendente') continue;
       const slot = data.slots.find((s) => s.id === registro.slotId);
       if (!slot) continue;
       result.push({
@@ -153,7 +156,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     }
 
     return result.sort((a, b) => a.horario.localeCompare(b.horario));
-  }, [data.slots, data.registros, selectedDate]);
+  }, [data.slots, data.schedules, data.registros, data.alunos, data.matriculas, selectedDate]);
 
   // Stats do dia selecionado
   const stats = useMemo(() => {
@@ -162,7 +165,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       const s = item.registro?.status ?? 'pendente';
       if (s === 'presente') presentes++;
       else if (s === 'falta') faltas++;
-      else if (s === 'reposicao') reposPendentes++;
+      else if (s === 'reposicao' && item.registro?.reposicaoStatus === 'pendente') reposPendentes++;
       else if (!item.emFerias) pendentes++;
     }
     return { total: flatCards.length, presentes, faltas, reposPendentes, pendentes };
@@ -202,8 +205,8 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
     onUpdateRegistro(alunoId, slot.id, selectedDate, slot.horario, next);
   }
 
-  function handleReposicaoStatus(registro: Registro, status: StatusAula) {
-    if (status === 'falta' && registro.status !== 'falta') {
+  function handleReposicaoStatus(registro: Registro, action: 'concluida' | 'nao_compareceu') {
+    if (action === 'nao_compareceu' && registro.reposicaoStatus !== 'nao_compareceu') {
       const aluno = data.alunos.find((a) => a.id === registro.alunoId);
       setFaltaModalState({
         alunoId: registro.alunoId,
@@ -216,10 +219,12 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       return;
     }
 
-    const next = registro.status === status ? 'reposicao' : status;
-    onUpdateRegistro(registro.alunoId, registro.slotId, registro.data, registro.horario, next, {
+    const nextRepStatus = registro.reposicaoStatus === action ? 'pendente' as const : action;
+    const nextStatus = nextRepStatus === 'concluida' ? 'presente' as const : nextRepStatus === 'nao_compareceu' ? 'falta' as const : 'reposicao' as const;
+    onUpdateRegistro(registro.alunoId, registro.slotId, registro.data, registro.horario, nextStatus, {
       data: registro.reposicaoData!,
       horario: registro.reposicaoHorario!,
+      reposicaoStatus: nextRepStatus,
     });
   }
 
@@ -416,10 +421,17 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                             Reposição
                           </span>
                         </div>
-                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${STATUS_BADGE[status]}`}>
-                          {STATUS_LABEL[status]}
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${
+                          registro.reposicaoStatus === 'concluida' ? 'text-emerald bg-emerald/10 border-emerald/40' :
+                          registro.reposicaoStatus === 'nao_compareceu' ? 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30' :
+                          registro.reposicaoStatus === 'cancelada' ? 'text-gray-600 dark:text-gray-400 bg-gray-500/10 border-gray-500/30' :
+                          'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30'
+                        }`}>
+                          {registro.reposicaoStatus === 'concluida' ? 'Concluída' :
+                           registro.reposicaoStatus === 'nao_compareceu' ? 'Não Compareceu' :
+                           registro.reposicaoStatus === 'cancelada' ? 'Cancelada' : 'Pendente'}
                         </span>
-                        {status === 'falta' && registro.faltaObservacao && (
+                        {registro.reposicaoStatus === 'nao_compareceu' && registro.faltaObservacao && (
                           <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
                             Obs.: {registro.faltaObservacao}
                           </p>
@@ -428,30 +440,23 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                     </div>
 
                     {/* Botões de ação */}
+                    {registro.reposicaoStatus === 'pendente' && (
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         aria-label="Reposição concluída"
-                        onClick={() => handleReposicaoStatus(registro, 'presente')}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
-                          status === 'presente'
-                            ? 'bg-emerald text-black border-emerald'
-                            : 'border-emerald/50 text-emerald active:bg-emerald/10'
-                        }`}
+                        onClick={() => handleReposicaoStatus(registro, 'concluida')}
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors border-emerald/50 text-emerald active:bg-emerald/10"
                       >
                         <Check size={14} strokeWidth={2.5} />
-                        Presente
+                        Concluída
                       </button>
                       <button
                         aria-label="Reposição não compareceu"
-                        onClick={() => handleReposicaoStatus(registro, 'falta')}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
-                          status === 'falta'
-                            ? 'bg-red-500 text-white border-red-500'
-                            : 'border-red-500/50 text-red-600 dark:text-red-400 active:bg-red-500/10'
-                        }`}
+                        onClick={() => handleReposicaoStatus(registro, 'nao_compareceu')}
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-500/50 text-red-600 dark:text-red-400 text-xs font-semibold active:bg-red-500/10"
                       >
                         <X size={14} strokeWidth={2.5} />
-                        Falta
+                        N. Comp.
                       </button>
                       <button
                         aria-label="Reagendar reposição"
@@ -462,6 +467,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                         Reagendar
                       </button>
                     </div>
+                    )}
                   </div>
                 );
               }
@@ -506,9 +512,23 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
                   {/* Botões de ação */}
                   {item.emFerias ? (
-                    <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-medium text-blue-600/80 dark:text-blue-400/80">
-                      <Palmtree size={13} />
-                      Aluno em férias — sem ações disponíveis
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-medium text-blue-600/80 dark:text-blue-400/80">
+                        <Palmtree size={13} />
+                        Aluno em férias nesta data
+                      </div>
+                      <button
+                        aria-label="Agendar reposição"
+                        onClick={() => handleStatus(item.alunoId, item.slot, 'reposicao')}
+                        className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                          status === 'reposicao'
+                            ? 'bg-amber-500 text-black border-amber-500'
+                            : 'border-amber-500/50 text-amber-600 dark:text-amber-400 active:bg-amber-500/10'
+                        }`}
+                      >
+                        <RotateCw size={14} strokeWidth={2.5} />
+                        Reposição (exceção)
+                      </button>
                     </div>
                   ) : (
                   <div className="grid grid-cols-3 gap-2">
@@ -558,41 +578,47 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
       )}
 
       {/* Modal de reposição */}
-      {modalState && (
-        <ReposicaoModal
-          alunoNome={modalState.alunoNome}
-          origData={modalState.origData}
-          origHorario={modalState.origHorario}
-          initialData={modalState.initialData}
-          initialHorario={modalState.initialHorario}
-          onClose={() => setModalState(null)}
-          onRemove={
-            modalState.allowRemove
-              ? () => {
-                  onUpdateRegistro(
-                    modalState.alunoId,
-                    modalState.slotId,
-                    modalState.origData,
-                    modalState.origHorario,
-                    'pendente',
-                  );
-                  setModalState(null);
-                }
-              : undefined
-          }
-          onConfirm={(reposicaoData, reposicaoHorario) => {
-            onUpdateRegistro(
-              modalState.alunoId,
-              modalState.slotId,
-              modalState.origData,
-              modalState.origHorario,
-              'reposicao',
-              { data: reposicaoData, horario: reposicaoHorario },
-            );
-            setModalState(null);
-          }}
-        />
-      )}
+      {modalState && (() => {
+        const alunoObj = data.alunos.find((a) => a.id === modalState.alunoId);
+        return alunoObj ? (
+          <ReposicaoModal
+            alunoNome={modalState.alunoNome}
+            alunoId={modalState.alunoId}
+            aluno={alunoObj}
+            data={data}
+            origData={modalState.origData}
+            origHorario={modalState.origHorario}
+            initialData={modalState.initialData}
+            initialHorario={modalState.initialHorario}
+            onClose={() => setModalState(null)}
+            onRemove={
+              modalState.allowRemove
+                ? () => {
+                    onUpdateRegistro(
+                      modalState.alunoId,
+                      modalState.slotId,
+                      modalState.origData,
+                      modalState.origHorario,
+                      'pendente',
+                    );
+                    setModalState(null);
+                  }
+                : undefined
+            }
+            onConfirm={(reposicaoData, reposicaoHorario, excecao) => {
+              onUpdateRegistro(
+                modalState.alunoId,
+                modalState.slotId,
+                modalState.origData,
+                modalState.origHorario,
+                'reposicao',
+                { data: reposicaoData, horario: reposicaoHorario, excecao, reposicaoStatus: 'pendente' },
+              );
+              setModalState(null);
+            }}
+          />
+        ) : null;
+      })()}
 
       {/* Modal de falta */}
       {faltaModalState && (
@@ -600,13 +626,16 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
           alunoNome={faltaModalState.alunoNome}
           onClose={() => setFaltaModalState(null)}
           onConfirm={(observacao) => {
+            const reposicao = faltaModalState.reposicao
+              ? { ...faltaModalState.reposicao, reposicaoStatus: 'nao_compareceu' as const }
+              : undefined;
             onUpdateRegistro(
               faltaModalState.alunoId,
               faltaModalState.slotId,
               faltaModalState.data,
               faltaModalState.horario,
               'falta',
-              faltaModalState.reposicao,
+              reposicao,
               observacao,
             );
             setFaltaModalState(null);

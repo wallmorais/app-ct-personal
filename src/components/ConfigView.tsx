@@ -4,7 +4,7 @@ import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDri
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { AppData, ProfessorVacation } from '../types';
 import type { ThemePref } from '../lib/theme';
-import { vacationsOverlap } from '../lib/periods';
+import { findOverlappingVacation } from '../lib/periods';
 import {
   exportData,
   importData,
@@ -54,6 +54,7 @@ function FeriasSection({ data, setData }: { data: AppData; setData: Props['setDa
   const [obs, setObs] = useState('');
   const [erro, setErro] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [conflito, setConflito] = useState<ProfessorVacation | null>(null);
 
   const sorted = [...data.feriasProfessor].sort((a, b) => b.dataInicio.localeCompare(a.dataInicio));
 
@@ -78,30 +79,38 @@ function FeriasSection({ data, setData }: { data: AppData; setData: Props['setDa
   function handleSave() {
     if (!inicio || !fim) { setErro('Preencha início e término.'); return; }
     if (fim < inicio) { setErro('Término deve ser após o início.'); return; }
-    if (vacationsOverlap(data.feriasProfessor, inicio, fim, editingId ?? undefined)) {
-      setErro('Este período sobrepõe férias já cadastradas.');
+    const overlap = findOverlappingVacation(data.feriasProfessor, inicio, fim, editingId ?? undefined);
+    if (overlap) {
+      setConflito(overlap);
       return;
     }
+    commitSave();
+  }
 
+  function commitSave(removeConflictId?: string) {
     setData((prev) => {
+      let feriasProfessor = removeConflictId
+        ? prev.feriasProfessor.filter((v) => v.id !== removeConflictId)
+        : prev.feriasProfessor;
+
       if (editingId) {
-        return {
-          ...prev,
-          feriasProfessor: prev.feriasProfessor.map((v) =>
-            v.id === editingId ? { ...v, dataInicio: inicio, dataFim: fim, observacao: obs.trim() || undefined } : v,
-          ),
+        feriasProfessor = feriasProfessor.map((v) =>
+          v.id === editingId ? { ...v, dataInicio: inicio, dataFim: fim, observacao: obs.trim() || undefined } : v,
+        );
+      } else {
+        const newVacation: ProfessorVacation = {
+          id: crypto.randomUUID(),
+          dataInicio: inicio,
+          dataFim: fim,
+          observacao: obs.trim() || undefined,
+          createdAt: new Date().toISOString(),
         };
+        feriasProfessor = [...feriasProfessor, newVacation];
       }
-      const newVacation: ProfessorVacation = {
-        id: crypto.randomUUID(),
-        dataInicio: inicio,
-        dataFim: fim,
-        observacao: obs.trim() || undefined,
-        createdAt: new Date().toISOString(),
-      };
-      return { ...prev, feriasProfessor: [...prev.feriasProfessor, newVacation] };
+      return { ...prev, feriasProfessor };
     });
     setFormOpen(false);
+    setConflito(null);
   }
 
   function handleDelete(id: string) {
@@ -185,6 +194,16 @@ function FeriasSection({ data, setData }: { data: AppData; setData: Props['setDa
           message="Deseja excluir este período de férias? Isso afetará apenas a contabilização futura."
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => handleDelete(confirmDelete)}
+        />
+      )}
+
+      {conflito && (
+        <ConfirmDialog
+          title="Período sobreposto"
+          message="Já existe um período de férias que coincide com as datas informadas. Deseja substituir o período existente?"
+          confirmLabel="Substituir"
+          onCancel={() => setConflito(null)}
+          onConfirm={() => commitSave(conflito.id)}
         />
       )}
     </section>

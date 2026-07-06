@@ -13,12 +13,12 @@ interface Props {
     data: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
   ) => void;
 }
 
-type FiltroStatus = 'todas' | 'pendentes' | 'concluidas' | 'faltas';
+type FiltroStatus = 'todas' | 'pendentes' | 'concluidas' | 'nao_compareceu' | 'canceladas';
 
 interface ReposicaoItem {
   registro: Registro;
@@ -48,39 +48,39 @@ const FILTROS: { key: FiltroStatus; label: string }[] = [
   { key: 'todas', label: 'Todas' },
   { key: 'pendentes', label: 'Pendentes' },
   { key: 'concluidas', label: 'Concluídas' },
-  { key: 'faltas', label: 'Faltas' },
+  { key: 'nao_compareceu', label: 'Não Compareceu' },
+  { key: 'canceladas', label: 'Canceladas' },
 ];
 
-function statusDaReposicao(r: Registro): 'pendente' | 'concluida' | 'falta' | 'vencida' {
-  if (r.status === 'presente') return 'concluida';
-  if (r.status === 'falta' && r.reposicaoData) return 'falta';
-  if (r.reposicaoData && r.reposicaoData < todayISO() && r.status === 'reposicao') return 'vencida';
-  return 'pendente';
+type StatusReposicaoView = 'pendente' | 'concluida' | 'nao_compareceu' | 'cancelada';
+
+function statusDaReposicao(r: Registro): StatusReposicaoView {
+  return (r.reposicaoStatus as StatusReposicaoView) ?? 'pendente';
 }
 
-function statusLabel(s: ReturnType<typeof statusDaReposicao>): string {
+function statusLabel(s: StatusReposicaoView): string {
   switch (s) {
     case 'concluida': return 'Concluída';
-    case 'falta': return 'Faltou';
-    case 'vencida': return 'Vencida';
+    case 'nao_compareceu': return 'Não Compareceu';
+    case 'cancelada': return 'Cancelada';
     default: return 'Pendente';
   }
 }
 
-function statusBadgeClass(s: ReturnType<typeof statusDaReposicao>): string {
+function statusBadgeClass(s: StatusReposicaoView): string {
   switch (s) {
     case 'concluida': return 'text-emerald bg-emerald/10 border-emerald/40';
-    case 'falta': return 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30';
-    case 'vencida': return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30';
+    case 'nao_compareceu': return 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30';
+    case 'cancelada': return 'text-gray-600 dark:text-gray-400 bg-gray-500/10 border-gray-500/30';
     default: return 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30';
   }
 }
 
-function statusCardBorder(s: ReturnType<typeof statusDaReposicao>): string {
+function statusCardBorder(s: StatusReposicaoView): string {
   switch (s) {
     case 'concluida': return 'border-emerald/30';
-    case 'falta': return 'border-red-500/30';
-    case 'vencida': return 'border-amber-500/30';
+    case 'nao_compareceu': return 'border-red-500/30';
+    case 'cancelada': return 'border-gray-500/30';
     default: return 'border-blue-500/30';
   }
 }
@@ -115,34 +115,37 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
     if (filtro === 'todas') return reposicoes;
     return reposicoes.filter((item) => {
       const s = statusDaReposicao(item.registro);
-      if (filtro === 'pendentes') return s === 'pendente' || s === 'vencida';
+      if (filtro === 'pendentes') return s === 'pendente';
       if (filtro === 'concluidas') return s === 'concluida';
-      if (filtro === 'faltas') return s === 'falta';
+      if (filtro === 'nao_compareceu') return s === 'nao_compareceu';
+      if (filtro === 'canceladas') return s === 'cancelada';
       return true;
     });
   }, [reposicoes, filtro]);
 
   const contagens = useMemo(() => {
-    let pendentes = 0, concluidas = 0, faltas = 0;
+    let pendentes = 0, concluidas = 0, naoCompareceu = 0, canceladas = 0;
     for (const item of reposicoes) {
       const s = statusDaReposicao(item.registro);
-      if (s === 'pendente' || s === 'vencida') pendentes++;
+      if (s === 'pendente') pendentes++;
       else if (s === 'concluida') concluidas++;
-      else if (s === 'falta') faltas++;
+      else if (s === 'nao_compareceu') naoCompareceu++;
+      else if (s === 'cancelada') canceladas++;
     }
-    return { total: reposicoes.length, pendentes, concluidas, faltas };
+    return { total: reposicoes.length, pendentes, concluidas, naoCompareceu, canceladas };
   }, [reposicoes]);
 
-  function handlePresente(r: Registro) {
-    const next = r.status === 'presente' ? 'reposicao' : 'presente';
-    onUpdateRegistro(r.alunoId, r.slotId, r.data, r.horario, next, {
+  function handleConcluida(r: Registro) {
+    const nextStatus = r.reposicaoStatus === 'concluida' ? 'pendente' : 'concluida';
+    onUpdateRegistro(r.alunoId, r.slotId, r.data, r.horario, nextStatus === 'concluida' ? 'presente' : 'reposicao', {
       data: r.reposicaoData!,
       horario: r.reposicaoHorario!,
+      reposicaoStatus: nextStatus,
     });
   }
 
-  function handleFalta(r: Registro) {
-    if (r.status !== 'falta') {
+  function handleNaoCompareceu(r: Registro) {
+    if (r.reposicaoStatus !== 'nao_compareceu') {
       const aluno = data.alunos.find((a) => a.id === r.alunoId);
       setFaltaModalState({
         alunoId: r.alunoId,
@@ -157,7 +160,24 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
     onUpdateRegistro(r.alunoId, r.slotId, r.data, r.horario, 'reposicao', {
       data: r.reposicaoData!,
       horario: r.reposicaoHorario!,
+      reposicaoStatus: 'pendente',
     });
+  }
+
+  function handleCancelar(r: Registro) {
+    if (r.reposicaoStatus === 'cancelada') {
+      onUpdateRegistro(r.alunoId, r.slotId, r.data, r.horario, 'reposicao', {
+        data: r.reposicaoData!,
+        horario: r.reposicaoHorario!,
+        reposicaoStatus: 'pendente',
+      });
+    } else {
+      onUpdateRegistro(r.alunoId, r.slotId, r.data, r.horario, 'reposicao', {
+        data: r.reposicaoData!,
+        horario: r.reposicaoHorario!,
+        reposicaoStatus: 'cancelada',
+      });
+    }
   }
 
   function handleReagendar(r: Registro) {
@@ -207,7 +227,7 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
           <p className="text-2xl font-bold tabular-nums text-blue-500 dark:text-blue-400">{contagens.pendentes}</p>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1">Pendentes</p>
@@ -217,8 +237,12 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
           <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1">Concluídas</p>
         </div>
         <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
-          <p className="text-2xl font-bold tabular-nums text-red-500 dark:text-red-400">{contagens.faltas}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1">Faltas</p>
+          <p className="text-2xl font-bold tabular-nums text-red-500 dark:text-red-400">{contagens.naoCompareceu}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1">N. Comp.</p>
+        </div>
+        <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
+          <p className="text-2xl font-bold tabular-nums text-gray-500 dark:text-gray-400">{contagens.canceladas}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-base-muted mt-1">Canceladas</p>
         </div>
       </div>
 
@@ -266,7 +290,6 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
       <div className="space-y-3">
         {filtradas.map(({ registro: r, alunoNome }) => {
           const status = statusDaReposicao(r);
-          const isFinal = status === 'concluida' || status === 'falta';
 
           return (
             <div
@@ -309,33 +332,44 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
               )}
 
               {/* Ações */}
-              {!isFinal && (
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => handlePresente(r)}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
-                      r.status === 'presente'
-                        ? 'bg-emerald text-black border-emerald'
-                        : 'border-emerald/50 text-emerald active:bg-emerald/10'
-                    }`}
-                  >
-                    <Check size={14} strokeWidth={2.5} />
-                    Presente
-                  </button>
-                  <button
-                    onClick={() => handleFalta(r)}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-500/50 text-red-600 dark:text-red-400 text-xs font-semibold active:bg-red-500/10"
-                  >
-                    <X size={14} strokeWidth={2.5} />
-                    Falta
-                  </button>
-                  <button
-                    onClick={() => handleReagendar(r)}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-amber-500/50 text-amber-600 dark:text-amber-400 text-xs font-semibold active:bg-amber-500/10"
-                  >
-                    <RotateCw size={14} strokeWidth={2.5} />
-                    Reagendar
-                  </button>
+              {status === 'pendente' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleConcluida(r)}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+                        r.reposicaoStatus === 'concluida'
+                          ? 'bg-emerald text-black border-emerald'
+                          : 'border-emerald/50 text-emerald active:bg-emerald/10'
+                      }`}
+                    >
+                      <Check size={14} strokeWidth={2.5} />
+                      Concluída
+                    </button>
+                    <button
+                      onClick={() => handleNaoCompareceu(r)}
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-500/50 text-red-600 dark:text-red-400 text-xs font-semibold active:bg-red-500/10"
+                    >
+                      <X size={14} strokeWidth={2.5} />
+                      Não Compareceu
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleCancelar(r)}
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-500/50 text-gray-600 dark:text-gray-400 text-xs font-semibold active:bg-gray-500/10"
+                    >
+                      <X size={14} strokeWidth={2.5} />
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => handleReagendar(r)}
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-amber-500/50 text-amber-600 dark:text-amber-400 text-xs font-semibold active:bg-amber-500/10"
+                    >
+                      <RotateCw size={14} strokeWidth={2.5} />
+                      Reagendar
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -344,37 +378,43 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
       </div>
 
       {/* Modal de reagendamento */}
-      {modalState && (
-        <ReposicaoModal
-          alunoNome={modalState.alunoNome}
-          origData={modalState.origData}
-          origHorario={modalState.origHorario}
-          initialData={modalState.initialData}
-          initialHorario={modalState.initialHorario}
-          onClose={() => setModalState(null)}
-          onRemove={() => {
-            onUpdateRegistro(
-              modalState.alunoId,
-              modalState.slotId,
-              modalState.origData,
-              modalState.origHorario,
-              'pendente',
-            );
-            setModalState(null);
-          }}
-          onConfirm={(reposicaoData, reposicaoHorario) => {
-            onUpdateRegistro(
-              modalState.alunoId,
-              modalState.slotId,
-              modalState.origData,
-              modalState.origHorario,
-              'reposicao',
-              { data: reposicaoData, horario: reposicaoHorario },
-            );
-            setModalState(null);
-          }}
-        />
-      )}
+      {modalState && (() => {
+        const alunoObj = data.alunos.find((a) => a.id === modalState.alunoId);
+        return alunoObj ? (
+          <ReposicaoModal
+            alunoNome={modalState.alunoNome}
+            alunoId={modalState.alunoId}
+            aluno={alunoObj}
+            data={data}
+            origData={modalState.origData}
+            origHorario={modalState.origHorario}
+            initialData={modalState.initialData}
+            initialHorario={modalState.initialHorario}
+            onClose={() => setModalState(null)}
+            onRemove={() => {
+              onUpdateRegistro(
+                modalState.alunoId,
+                modalState.slotId,
+                modalState.origData,
+                modalState.origHorario,
+                'pendente',
+              );
+              setModalState(null);
+            }}
+            onConfirm={(reposicaoData, reposicaoHorario, excecao) => {
+              onUpdateRegistro(
+                modalState.alunoId,
+                modalState.slotId,
+                modalState.origData,
+                modalState.origHorario,
+                'reposicao',
+                { data: reposicaoData, horario: reposicaoHorario, excecao, reposicaoStatus: 'pendente' as const },
+              );
+              setModalState(null);
+            }}
+          />
+        ) : null;
+      })()}
 
       {/* Modal de falta */}
       {faltaModalState && (
@@ -388,7 +428,7 @@ export default function ReposicoesView({ data, onUpdateRegistro }: Props) {
               faltaModalState.data,
               faltaModalState.horario,
               'falta',
-              faltaModalState.reposicao,
+              { ...faltaModalState.reposicao, reposicaoStatus: 'nao_compareceu' as const },
               observacao,
             );
             setFaltaModalState(null);

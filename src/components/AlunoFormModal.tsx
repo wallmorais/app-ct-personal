@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Trash2, CalendarClock, FileText, Palmtree, Plus } from 'lucide-react';
-import type { Aluno, AulaSlot, DiaSemana, StudentEnrollment } from '../types';
+import type { Aluno, AulaSlot, DiaSemana, StudentEnrollment, StudentSchedule } from '../types';
+import { findOverlappingVacation } from '../lib/periods';
 import ConfirmDialog from './ConfirmDialog';
 
 interface StudentVacation {
@@ -12,6 +13,7 @@ interface StudentVacation {
 interface Props {
   aluno: Aluno | null;
   slots: AulaSlot[];
+  schedules: StudentSchedule[];
   studentVacations: StudentVacation[];
   onSave: (aluno: Aluno, agenda: AgendaDia[], vacations: StudentVacation[]) => void;
   onDelete?: (id: string) => void;
@@ -42,15 +44,18 @@ function addOneHour(horario: string): string {
   return `${String(next).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function buildInitialAgenda(aluno: Aluno | null, slots: AulaSlot[]): AgendaState {
+function buildInitialAgenda(aluno: Aluno | null, slots: AulaSlot[], schedules: StudentSchedule[]): AgendaState {
   const base: AgendaState = {};
   for (let d = 0; d <= 6; d++) base[d] = { ativo: false, inicio: '07:00', fim: '08:00' };
 
   if (!aluno) return base;
 
-  for (const slot of slots) {
-    if (!slot.alunoIds.includes(aluno.id)) continue;
-    for (const dia of slot.dias) {
+  const slotMap = new Map(slots.map((s) => [s.id, s]));
+  for (const sched of schedules) {
+    if (sched.alunoId !== aluno.id) continue;
+    const slot = slotMap.get(sched.slotId);
+    if (!slot) continue;
+    for (const dia of sched.dias) {
       base[dia] = {
         ativo: true,
         inicio: slot.horario,
@@ -62,7 +67,7 @@ function buildInitialAgenda(aluno: Aluno | null, slots: AulaSlot[]): AgendaState
   return base;
 }
 
-export default function AlunoFormModal({ aluno, slots, studentVacations, onSave, onDelete, onClose }: Props) {
+export default function AlunoFormModal({ aluno, slots, schedules, studentVacations, onSave, onDelete, onClose }: Props) {
   const [nome, setNome] = useState(aluno?.nome ?? '');
   const [telefone, setTelefone] = useState(aluno?.telefone ?? '');
   const [plano, setPlano] = useState(aluno?.plano ?? 8);
@@ -77,7 +82,8 @@ export default function AlunoFormModal({ aluno, slots, studentVacations, onSave,
   const [newVacInicio, setNewVacInicio] = useState('');
   const [newVacFim, setNewVacFim] = useState('');
   const [vacFormOpen, setVacFormOpen] = useState(false);
-  const [agenda, setAgenda] = useState<AgendaState>(() => buildInitialAgenda(aluno, slots));
+  const [vacConflito, setVacConflito] = useState<StudentVacation | null>(null);
+  const [agenda, setAgenda] = useState<AgendaState>(() => buildInitialAgenda(aluno, slots, schedules));
   const [nomeErro, setNomeErro] = useState(false);
   const [horarioErro, setHorarioErro] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
@@ -122,11 +128,18 @@ export default function AlunoFormModal({ aluno, slots, studentVacations, onSave,
       fim: agenda[d.value].fim,
     }));
 
-    // Inclui período de férias pendente (preenchido mas não confirmado com "Salvar" da seção)
-    const vacationsFinal =
-      vacFormOpen && newVacInicio && newVacFim && newVacFim >= newVacInicio
-        ? [...vacations, { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim }]
-        : vacations;
+    // Inclui período de férias pendente (preenchido mas não confirmado com "Salvar" da seção),
+    // desde que não sobreponha um período já existente — nesse caso o usuário precisa
+    // resolver o conflito explicitamente pelo botão "Salvar" da seção de férias.
+    const pendingVacValido =
+      vacFormOpen &&
+      newVacInicio &&
+      newVacFim &&
+      newVacFim >= newVacInicio &&
+      !findOverlappingVacation(vacations, newVacInicio, newVacFim);
+    const vacationsFinal = pendingVacValido
+      ? [...vacations, { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim }]
+      : vacations;
 
     onSave(
       {
@@ -320,6 +333,11 @@ export default function AlunoFormModal({ aluno, slots, studentVacations, onSave,
                     type="button"
                     onClick={() => {
                       if (newVacInicio && newVacFim && newVacFim >= newVacInicio) {
+                        const overlap = findOverlappingVacation(vacations, newVacInicio, newVacFim);
+                        if (overlap) {
+                          setVacConflito(overlap);
+                          return;
+                        }
                         setVacations((prev) => [...prev, { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim }]);
                         setVacFormOpen(false);
                       }
@@ -451,6 +469,23 @@ export default function AlunoFormModal({ aluno, slots, studentVacations, onSave,
           onConfirm={() => {
             setConfirmandoExclusao(false);
             onDelete(aluno!.id);
+          }}
+        />
+      )}
+
+      {vacConflito && (
+        <ConfirmDialog
+          title="Período sobreposto"
+          message="Já existe um período de férias que coincide com as datas informadas. Deseja substituir o período existente?"
+          confirmLabel="Substituir"
+          onCancel={() => setVacConflito(null)}
+          onConfirm={() => {
+            setVacations((prev) => [
+              ...prev.filter((v) => v.id !== vacConflito.id),
+              { id: crypto.randomUUID(), dataInicio: newVacInicio, dataFim: newVacFim },
+            ]);
+            setVacConflito(null);
+            setVacFormOpen(false);
           }}
         />
       )}

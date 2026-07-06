@@ -20,6 +20,7 @@ export function loadData(): AppData {
     parsed.pagamentos ??= [];
     parsed.feriasProfessor ??= [];
     parsed.matriculas ??= [];
+    parsed.schedules ??= [];
 
     // Migração: ferias única → array de períodos
     if (parsed.config.ferias && parsed.feriasProfessor.length === 0) {
@@ -30,6 +31,36 @@ export function loadData(): AppData {
         createdAt: new Date().toISOString(),
       });
       parsed.config.ferias = undefined;
+    }
+
+    // Migração: slots com dias/alunoIds → schedules individuais
+    if (parsed.schedules.length === 0 && parsed.slots.some((s: any) => s.alunoIds?.length)) {
+      for (const slot of parsed.slots) {
+        const oldDias = (slot as any).dias as number[] | undefined;
+        const oldAlunoIds = (slot as any).alunoIds as string[] | undefined;
+        if (!oldDias?.length || !oldAlunoIds?.length) continue;
+        for (const alunoId of oldAlunoIds) {
+          parsed.schedules.push({
+            id: crypto.randomUUID(),
+            alunoId,
+            slotId: slot.id,
+            dias: [...oldDias] as import('../types').DiaSemana[],
+          });
+        }
+      }
+      for (const slot of parsed.slots) {
+        delete (slot as any).dias;
+        delete (slot as any).alunoIds;
+      }
+    }
+
+    // Migração: registros com reposição sem reposicaoStatus
+    for (const reg of parsed.registros) {
+      if (reg.reposicaoData && !reg.reposicaoStatus) {
+        if (reg.status === 'presente') reg.reposicaoStatus = 'concluida';
+        else if (reg.status === 'falta' && reg.reposicaoData) reg.reposicaoStatus = 'nao_compareceu';
+        else reg.reposicaoStatus = 'pendente';
+      }
     }
 
     // Migração: dataAdesao → matrícula ATIVO

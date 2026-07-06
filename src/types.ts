@@ -29,11 +29,22 @@ export interface AulaSlot {
   id: string;
   horario: string; // "07:00"
   horarioFim?: string; // "08:00"
+  /** @deprecated Mantido para migração — usar StudentSchedule */
+  dias?: DiaSemana[];
+  /** @deprecated Mantido para migração — usar StudentSchedule */
+  alunoIds?: string[];
+}
+
+export interface StudentSchedule {
+  id: string;
+  alunoId: string;
+  slotId: string;
   dias: DiaSemana[];
-  alunoIds: string[];
 }
 
 export type StatusAula = 'pendente' | 'presente' | 'falta' | 'reposicao';
+
+export type StatusReposicao = 'pendente' | 'concluida' | 'cancelada' | 'nao_compareceu';
 
 export interface Registro {
   id: string;
@@ -44,8 +55,11 @@ export interface Registro {
   status: StatusAula;
   reposicaoData?: string;
   reposicaoHorario?: string;
+  reposicaoStatus?: StatusReposicao;
   /** Observação opcional registrada ao marcar falta (ex.: motivo, aviso prévio). */
   faltaObservacao?: string;
+  /** Exceções confirmadas pelo professor ao agendar reposição em período de férias. */
+  reposicaoExcecao?: ('ferias_professor' | 'ferias_aluno')[];
 }
 
 export interface FeriasPeriodo {
@@ -83,6 +97,7 @@ export interface ConfigData {
 export interface AppData {
   alunos: Aluno[];
   slots: AulaSlot[];
+  schedules: StudentSchedule[];
   registros: Registro[];
   config: ConfigData;
   pagamentos: Pagamento[];

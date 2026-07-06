@@ -1,4 +1,4 @@
-import type { AppData, Aluno, AulaSlot } from '../types';
+import type { AppData, Aluno, AulaSlot, StudentSchedule } from '../types';
 
 const uid = () => crypto.randomUUID();
 
@@ -15,43 +15,28 @@ export function buildSeedData(): AppData {
 
   const byName = (nome: string) => alunos.find((a) => a.nome === nome)!.id;
 
-  // dias: 0=Domingo, 1=Segunda, 2=Terça, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sábado
-  const slots: AulaSlot[] = [
-    {
-      id: uid(),
-      horario: '07:00',
-      dias: [1, 3, 5],
-      alunoIds: [byName('Mauricio'), byName('Adriana')],
-    },
-    {
-      id: uid(),
-      horario: '08:00',
-      dias: [1, 3, 5],
-      alunoIds: [byName('Fernanda')],
-    },
-    {
-      id: uid(),
-      horario: '10:00',
-      dias: [1, 3, 5],
-      alunoIds: [byName('Rocilda'), byName('Cris')],
-    },
-    {
-      id: uid(),
-      horario: '09:00',
-      dias: [1, 3],
-      alunoIds: [byName('Maria Luiza')],
-    },
-    {
-      id: uid(),
-      horario: '07:00',
-      dias: [2, 4],
-      alunoIds: [byName('Rodrigo')],
-    },
+  const slot07MQS: AulaSlot = { id: uid(), horario: '07:00' };
+  const slot08MQS: AulaSlot = { id: uid(), horario: '08:00' };
+  const slot10MQS: AulaSlot = { id: uid(), horario: '10:00' };
+  const slot09MQ: AulaSlot = { id: uid(), horario: '09:00' };
+  const slot07TQ: AulaSlot = { id: uid(), horario: '07:00' };
+
+  const slots: AulaSlot[] = [slot07MQS, slot08MQS, slot10MQS, slot09MQ, slot07TQ];
+
+  const schedules: StudentSchedule[] = [
+    { id: uid(), alunoId: byName('Mauricio'), slotId: slot07MQS.id, dias: [1, 3, 5] },
+    { id: uid(), alunoId: byName('Adriana'), slotId: slot07MQS.id, dias: [1, 3, 5] },
+    { id: uid(), alunoId: byName('Fernanda'), slotId: slot08MQS.id, dias: [1, 3, 5] },
+    { id: uid(), alunoId: byName('Rocilda'), slotId: slot10MQS.id, dias: [1, 3, 5] },
+    { id: uid(), alunoId: byName('Cris'), slotId: slot10MQS.id, dias: [1, 3, 5] },
+    { id: uid(), alunoId: byName('Maria Luiza'), slotId: slot09MQ.id, dias: [1, 3] },
+    { id: uid(), alunoId: byName('Rodrigo'), slotId: slot07TQ.id, dias: [2, 4] },
   ];
 
   return {
     alunos,
     slots,
+    schedules,
     registros: [],
     pagamentos: [],
     feriasProfessor: [],

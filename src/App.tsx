@@ -80,18 +80,16 @@ export default function App() {
     const today = todayISO();
     if (isProfessorOnVacation(data, today)) return 0;
     let count = 0;
-    for (const slot of data.slots) {
-      if (!slot.dias.includes(dow)) continue;
-      for (const alunoId of slot.alunoIds) {
-        if (!isStudentActiveOnDate(data, alunoId, today)) continue;
-        const reg = data.registros.find(
-          (r) => r.alunoId === alunoId && r.slotId === slot.id && r.data === today,
-        );
-        if (!reg || reg.status === 'pendente') count++;
-      }
+    for (const schedule of data.schedules) {
+      if (!schedule.dias.includes(dow)) continue;
+      if (!isStudentActiveOnDate(data, schedule.alunoId, today)) continue;
+      const reg = data.registros.find(
+        (r) => r.alunoId === schedule.alunoId && r.slotId === schedule.slotId && r.data === today,
+      );
+      if (!reg || reg.status === 'pendente') count++;
     }
     for (const reg of data.registros) {
-      if (reg.reposicaoData === today && reg.status === 'reposicao') count++;
+      if (reg.reposicaoData === today && reg.reposicaoStatus === 'pendente') count++;
     }
     return count;
   }, [data]);
@@ -128,7 +126,7 @@ export default function App() {
     dataAula: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('./types').StatusReposicao },
     faltaObservacao?: string,
   ) {
     setData((prev) => {
@@ -136,6 +134,9 @@ export default function App() {
         (r) => r.alunoId === alunoId && r.slotId === slotId && r.data === dataAula,
       );
       const observacao = status === 'falta' ? faltaObservacao?.trim() || undefined : undefined;
+      const excecao = reposicao?.excecao?.length ? reposicao.excecao : undefined;
+
+      const reposicaoStatus = reposicao ? (reposicao.reposicaoStatus ?? 'pendente') : undefined;
 
       if (existing) {
         return {
@@ -147,6 +148,8 @@ export default function App() {
                   status,
                   reposicaoData: reposicao?.data,
                   reposicaoHorario: reposicao?.horario,
+                  reposicaoStatus,
+                  reposicaoExcecao: excecao,
                   faltaObservacao: observacao,
                 }
               : r,
@@ -167,6 +170,8 @@ export default function App() {
             status,
             reposicaoData: reposicao?.data,
             reposicaoHorario: reposicao?.horario,
+            reposicaoStatus,
+            reposicaoExcecao: excecao,
             faltaObservacao: observacao,
           },
         ],
@@ -216,7 +221,7 @@ export default function App() {
           {view === 'hoje' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
           {view === 'reposicoes' && <ReposicoesView data={data} onUpdateRegistro={updateRegistro} />}
           {view === 'alunos' && <AlunosView data={data} setData={setData} />}
-          {view === 'relatorios' && <RelatoriosView data={data} setData={setData} />}
+          {view === 'relatorios' && <RelatoriosView data={data} />}
           {view === 'config' && (
             <ConfigView
               data={data}

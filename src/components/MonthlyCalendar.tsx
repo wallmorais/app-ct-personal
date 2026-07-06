@@ -13,8 +13,8 @@ interface Props {
 function countAgendaItems(data: AppData, dateISO: string): number {
   const dow = dowOf(dateISO);
   let count = 0;
-  for (const slot of data.slots) {
-    if (slot.dias.includes(dow)) count += slot.alunoIds.length;
+  for (const schedule of data.schedules) {
+    if (schedule.dias.includes(dow)) count++;
   }
   for (const r of data.registros) {
     if (r.reposicaoData === dateISO) count += 1;

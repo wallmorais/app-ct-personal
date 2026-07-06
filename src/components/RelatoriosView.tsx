@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, DollarSign, AlertTriangle, History, Palmtree, UserPlus, UserMinus, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { AppData, Pagamento, StatusPagamento } from '../types';
-import { monthKeyOf, todayISO, formatDateLabel, monthLabel, startOfMonth, shiftMonth, addDays } from '../lib/date';
+import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, Palmtree, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { AppData } from '../types';
+import { formatDateLabel, monthLabel, startOfMonth, shiftMonth, addDays } from '../lib/date';
 import { getEnrollmentsForStudent, getVacationsInRange } from '../lib/periods';
 import {
   overviewStats,
@@ -17,7 +17,6 @@ import { Logo } from './Logo';
 
 interface Props {
   data: AppData;
-  setData: React.Dispatch<React.SetStateAction<AppData>>;
 }
 
 
@@ -73,6 +72,16 @@ function formatDateFull(iso: string): string {
 
 function formatPeriodo(range: DateRange): string {
   return `${formatDateFull(range.start)} a ${formatDateFull(range.end)}`;
+}
+
+/** Resumo legível das reposições de um aluno, ex.: "1 concluída · 2 pendentes". Omite categorias zeradas. */
+function formatReposicaoStats(rs: AlunoStats['reposicaoStats']): string {
+  const partes: string[] = [];
+  if (rs.pendentes > 0) partes.push(`${rs.pendentes} ${rs.pendentes === 1 ? 'pendente' : 'pendentes'}`);
+  if (rs.concluidas > 0) partes.push(`${rs.concluidas} ${rs.concluidas === 1 ? 'concluída' : 'concluídas'}`);
+  if (rs.naoCompareceu > 0) partes.push(`${rs.naoCompareceu} não compareceu`);
+  if (rs.canceladas > 0) partes.push(`${rs.canceladas} ${rs.canceladas === 1 ? 'cancelada' : 'canceladas'}`);
+  return partes.length > 0 ? partes.join(' · ') : 'sem reposições';
 }
 
 interface HistoricoComAluno extends HistoricoEntry {
@@ -267,59 +276,12 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
   );
 }
 
-const STATUS_PAGAMENTO_LABEL: Record<StatusPagamento, string> = {
-  pago: 'Pago',
-  pendente: 'Pendente',
-  atrasado: 'Atrasado',
-};
-
-const STATUS_PAGAMENTO_CLASS: Record<StatusPagamento, string> = {
-  pago: 'text-emerald bg-emerald/10 border-emerald/40',
-  pendente: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
-  atrasado: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30',
-};
-
-type ReportMode = 'financeiro' | 'historico';
-
-export default function RelatoriosView({ data, setData }: Props) {
+export default function RelatoriosView({ data }: Props) {
   const nomeProfissional = data.config.nomeProfissional;
   const registroProfissional = data.config.registroProfissional;
-  const [reportMode, setReportMode] = useState<ReportMode>('financeiro');
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
-
-  function getPagamento(alunoId: string, mes: string): Pagamento | undefined {
-    return data.pagamentos.find((p) => p.alunoId === alunoId && p.mes === mes);
-  }
-
-  function togglePagamento(alunoId: string, mes: string, valor: number) {
-    setData((prev) => {
-      const existing = prev.pagamentos.find((p) => p.alunoId === alunoId && p.mes === mes);
-      if (existing) {
-        const nextStatus: StatusPagamento =
-          existing.status === 'pago' ? 'pendente' :
-          existing.status === 'pendente' ? 'atrasado' : 'pago';
-        return {
-          ...prev,
-          pagamentos: prev.pagamentos.map((p) =>
-            p.alunoId === alunoId && p.mes === mes
-              ? { ...p, status: nextStatus, dataPagamento: nextStatus === 'pago' ? todayISO() : undefined }
-              : p,
-          ),
-        };
-      }
-      return {
-        ...prev,
-        pagamentos: [...prev.pagamentos, {
-          alunoId,
-          mes,
-          status: 'pago' as StatusPagamento,
-          dataPagamento: todayISO(),
-          valor,
-        }],
-      };
-    });
-  }
+  const [modoIntervalo, setModoIntervalo] = useState<'mes' | 'periodo'>('mes');
 
   const stats = useMemo(() => overviewStats(data, range), [data, range]);
   const emitidoEm = useMemo(() => new Date().toLocaleString('pt-BR'), []);
@@ -440,66 +402,90 @@ export default function RelatoriosView({ data, setData }: Props) {
           <h2 className="text-lg font-bold">Relatório</h2>
           <p className="text-sm text-base-muted">{formatPeriodo(range)}</p>
         </div>
-        {reportMode === 'financeiro' && (
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
-          >
-            <FileDown size={16} strokeWidth={2.5} />
-            Gerar PDF
-          </button>
-        )}
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
+        >
+          <FileDown size={16} strokeWidth={2.5} />
+          Gerar PDF
+        </button>
       </div>
 
-      {/* Toggle Financeiro / Histórico */}
+      {/* Toggle Mês / Período — só na tela */}
       <div className="no-print grid grid-cols-2 gap-2 bg-base-surface border border-base-border rounded-xl p-1">
         <button
-          onClick={() => setReportMode('financeiro')}
+          onClick={() => {
+            setModoIntervalo('mes');
+            setRange(currentMonthRange());
+          }}
           className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            reportMode === 'financeiro' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
+            modoIntervalo === 'mes' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
           }`}
         >
-          <TrendingUp size={15} />
-          Financeiro
+          Mês
         </button>
         <button
-          onClick={() => setReportMode('historico')}
+          onClick={() => setModoIntervalo('periodo')}
           className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            reportMode === 'historico' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
+            modoIntervalo === 'periodo' ? 'bg-emerald text-black' : 'text-base-muted active:bg-base-hover/5'
           }`}
         >
-          <History size={15} />
-          Histórico
+          Período
         </button>
       </div>
-
-      {/* ═══════════ MODO FINANCEIRO ═══════════ */}
-      {reportMode === 'financeiro' && <>
 
       {/* Navegação por mês — só na tela */}
-      <div className="no-print flex items-center justify-between">
-        <button
-          onClick={() => {
-            const prev = shiftMonth(range.start, -1);
-            setRange({ start: prev, end: addDays(shiftMonth(prev, 1), -1) });
-          }}
-          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
-        >
-          <ChevronLeft size={16} />
-          Anterior
-        </button>
-        <span className="text-sm font-bold">{monthLabel(startOfMonth(range.start))}</span>
-        <button
-          onClick={() => {
-            const next = shiftMonth(range.start, 1);
-            setRange({ start: next, end: addDays(shiftMonth(next, 1), -1) });
-          }}
-          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
-        >
-          Próximo
-          <ChevronRight size={16} />
-        </button>
-      </div>
+      {modoIntervalo === 'mes' && (
+        <div className="no-print flex items-center justify-between">
+          <button
+            onClick={() => {
+              const prev = shiftMonth(range.start, -1);
+              setRange({ start: prev, end: addDays(shiftMonth(prev, 1), -1) });
+            }}
+            className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+          >
+            <ChevronLeft size={16} />
+            Anterior
+          </button>
+          <span className="text-sm font-bold">{monthLabel(startOfMonth(range.start))}</span>
+          <button
+            onClick={() => {
+              const next = shiftMonth(range.start, 1);
+              setRange({ start: next, end: addDays(shiftMonth(next, 1), -1) });
+            }}
+            className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
+          >
+            Próximo
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Seleção de período customizado — só na tela */}
+      {modoIntervalo === 'periodo' && (
+        <div className="no-print grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="periodo-inicio">Data inicial</label>
+            <input
+              id="periodo-inicio"
+              type="date"
+              value={range.start}
+              max={range.end}
+              onChange={(e) => handleRangeChange('start', e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="periodo-fim">Data final</label>
+            <input
+              id="periodo-fim"
+              type="date"
+              value={range.end}
+              min={range.start}
+              onChange={(e) => handleRangeChange('end', e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Filtro de alunos — só na tela */}
       <div className="no-print space-y-2">
@@ -697,49 +683,31 @@ export default function RelatoriosView({ data, setData }: Props) {
           <div>
             <h3 className="text-sm font-semibold text-base-muted mb-2 px-1">Por aluno</h3>
             <div className="space-y-2">
-              {stats.porAluno.map((s) => {
-                const mes = monthKeyOf(range.start);
-                const pag = getPagamento(s.aluno.id, mes);
-                const pagStatus: StatusPagamento = pag?.status ?? 'pendente';
-                return (
-                  <div key={s.aluno.id} className="bg-base-card border border-base-border rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold">{s.aluno.nome}</p>
-                      <p className="font-bold text-emerald tabular-nums">{formatBRL(s.faturamento)}</p>
-                    </div>
-
-                    <div className="h-1.5 rounded-full bg-base-surface overflow-hidden mb-2">
-                      <div
-                        className="h-full bg-electric rounded-full transition-all"
-                        style={{ width: `${Math.min(s.taxaPresenca, 100)}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-base-muted">
-                      <span>
-                        {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
-                      </span>
-                      <span className="flex items-center gap-2.5">
-                        <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
-                        <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
-                      </span>
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-base-border flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs text-base-muted">
-                        <DollarSign size={13} />
-                        <span>Pagamento</span>
-                      </div>
-                      <button
-                        onClick={() => togglePagamento(s.aluno.id, mes, s.faturamento)}
-                        className={`text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border transition-colors ${STATUS_PAGAMENTO_CLASS[pagStatus]}`}
-                      >
-                        {STATUS_PAGAMENTO_LABEL[pagStatus]}
-                      </button>
-                    </div>
+              {stats.porAluno.map((s) => (
+                <div key={s.aluno.id} className="bg-base-card border border-base-border rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-semibold">{s.aluno.nome}</p>
+                    <p className="font-bold text-emerald tabular-nums">{formatBRL(s.faturamento)}</p>
                   </div>
-                );
-              })}
+
+                  <div className="h-1.5 rounded-full bg-base-surface overflow-hidden mb-2">
+                    <div
+                      className="h-full bg-electric rounded-full transition-all"
+                      style={{ width: `${Math.min(s.taxaPresenca, 100)}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-base-muted">
+                    <span>
+                      {s.presencas} / {s.totalPlano} aulas ({s.taxaPresenca}%)
+                    </span>
+                    <span className="flex items-center gap-2.5">
+                      <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{formatReposicaoStats(s.reposicaoStats)}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -785,7 +753,7 @@ export default function RelatoriosView({ data, setData }: Props) {
                     </span>
                     <span className="flex items-center gap-2.5">
                       <span className="text-red-600 dark:text-red-400">{s.faltas} {s.faltas === 1 ? 'falta' : 'faltas'}</span>
-                      <span className="text-amber-600 dark:text-amber-400">{s.reposicoes} {s.reposicoes === 1 ? 'subst.' : 'substs.'}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{formatReposicaoStats(s.reposicaoStats)}</span>
                     </span>
                   </div>
                 </div>
@@ -805,167 +773,6 @@ export default function RelatoriosView({ data, setData }: Props) {
         </div>
       )}
 
-      </>}
-
-      {/* ═══════════ MODO HISTÓRICO ═══════════ */}
-      {reportMode === 'historico' && (
-        <HistoricoTimeline data={data} />
-      )}
-    </div>
-  );
-}
-
-type HistoricoFilter = 'todos' | 'professor' | string;
-
-interface TimelineEvent {
-  date: string;
-  label: string;
-  icon: 'adesao' | 'encerramento' | 'ferias_inicio' | 'ferias_fim' | 'reativacao';
-  entity: string;
-}
-
-const TIMELINE_ICON_CLASS = {
-  adesao: 'bg-emerald/20 text-emerald',
-  reativacao: 'bg-emerald/20 text-emerald',
-  encerramento: 'bg-red-500/20 text-red-500',
-  ferias_inicio: 'bg-blue-500/20 text-blue-500',
-  ferias_fim: 'bg-blue-500/20 text-blue-500',
-};
-
-function HistoricoTimeline({ data }: { data: AppData }) {
-  const [filter, setFilter] = useState<HistoricoFilter>('todos');
-  const [month, setMonth] = useState(() => startOfMonth(todayISO()));
-
-  const monthStart = month;
-  const monthEnd = addDays(shiftMonth(month, 1), -1);
-
-  const events = useMemo(() => {
-    const result: TimelineEvent[] = [];
-
-    // Professor vacations
-    if (filter === 'todos' || filter === 'professor') {
-      for (const v of data.feriasProfessor ?? []) {
-        result.push({ date: v.dataInicio, label: 'Início das férias', icon: 'ferias_inicio', entity: 'Professor' });
-        result.push({ date: v.dataFim, label: 'Fim das férias', icon: 'ferias_fim', entity: 'Professor' });
-      }
-    }
-
-    // Student enrollments
-    const students = filter === 'professor' ? [] : filter === 'todos' ? data.alunos : data.alunos.filter((a) => a.id === filter);
-    for (const aluno of students) {
-      const enrollments = getEnrollmentsForStudent(data, aluno.id);
-      for (const e of enrollments) {
-        if (e.tipo === 'ATIVO') {
-          const isFirst = enrollments.indexOf(e) === 0;
-          result.push({
-            date: e.dataInicio,
-            label: isFirst ? 'Aluno cadastrado' : 'Contrato reativado',
-            icon: isFirst ? 'adesao' : 'reativacao',
-            entity: aluno.nome,
-          });
-          if (e.dataFim) {
-            result.push({ date: e.dataFim, label: 'Contrato encerrado', icon: 'encerramento', entity: aluno.nome });
-          }
-        } else if (e.tipo === 'FERIAS') {
-          result.push({ date: e.dataInicio, label: 'Início das férias', icon: 'ferias_inicio', entity: aluno.nome });
-          if (e.dataFim) {
-            result.push({ date: e.dataFim, label: 'Fim das férias', icon: 'ferias_fim', entity: aluno.nome });
-          }
-        } else if (e.tipo === 'INATIVO') {
-          result.push({ date: e.dataInicio, label: 'Contrato encerrado', icon: 'encerramento', entity: aluno.nome });
-        }
-      }
-
-      // Legacy: if no enrollments but has dataAdesao
-      if (enrollments.length === 0 && aluno.dataAdesao) {
-        result.push({ date: aluno.dataAdesao, label: 'Aluno cadastrado', icon: 'adesao', entity: aluno.nome });
-      }
-    }
-
-    return result
-      .filter((ev) => ev.date >= monthStart && ev.date <= monthEnd)
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [data, filter, monthStart, monthEnd]);
-
-  function fmtDate(iso: string) {
-    return new Date(iso + 'T12:00').toLocaleDateString('pt-BR');
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Navegação por mês */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setMonth(shiftMonth(month, -1))}
-          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
-        >
-          <ChevronLeft size={16} />
-          Anterior
-        </button>
-        <span className="text-sm font-bold">{monthLabel(month)}</span>
-        <button
-          onClick={() => setMonth(shiftMonth(month, 1))}
-          className="flex items-center gap-1 text-sm font-semibold text-base-muted active:text-emerald transition-colors px-2 py-1.5 rounded-lg"
-        >
-          Próximo
-          <ChevronRight size={16} />
-        </button>
-      </div>
-
-      {/* Filtro */}
-      <div className="space-y-2">
-        <label className="!mb-0 px-1">Filtrar por</label>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'todos' as const, label: 'Todos' },
-            { id: 'professor' as const, label: 'Professor' },
-            ...data.alunos.map((a) => ({ id: a.id, label: a.nome })),
-          ].map((opt) => {
-            const active = filter === opt.id;
-            return (
-              <button
-                key={opt.id}
-                onClick={() => setFilter(opt.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                  active
-                    ? 'bg-emerald text-black border-emerald'
-                    : 'bg-base-surface text-base-muted border-base-border active:bg-base-hover/5'
-                }`}
-              >
-                {active && <Check size={13} strokeWidth={3} />}
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Timeline */}
-      {events.length === 0 ? (
-        <div className="text-center py-12 space-y-2">
-          <History size={28} className="mx-auto text-base-muted opacity-30" />
-          <p className="text-base-muted text-sm">Nenhum evento registrado.</p>
-        </div>
-      ) : (
-        <div className="relative pl-6">
-          <div className="absolute left-[11px] top-2 bottom-2 w-px bg-base-border" />
-          {events.map((ev, i) => (
-            <div key={`${ev.date}-${ev.entity}-${ev.label}-${i}`} className="relative flex gap-3 pb-4">
-              <div className={`absolute left-[-13px] w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${TIMELINE_ICON_CLASS[ev.icon]}`}>
-                {ev.icon === 'adesao' && <UserPlus size={12} />}
-                {ev.icon === 'reativacao' && <RefreshCw size={12} />}
-                {ev.icon === 'encerramento' && <UserMinus size={12} />}
-                {(ev.icon === 'ferias_inicio' || ev.icon === 'ferias_fim') && <Palmtree size={12} />}
-              </div>
-              <div className="ml-3 min-w-0">
-                <p className="text-xs text-base-muted">{fmtDate(ev.date)}</p>
-                <p className="text-sm font-semibold">{ev.label}</p>
-                <p className="text-xs text-base-muted">{ev.entity}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
