@@ -105,4 +105,11 @@ export interface AppData {
   matriculas: StudentEnrollment[];
 }
 
+export interface Profile {
+  id: string;
+  nome: string;
+  telefone: string;
+  cidade: string;
+}
+
 export type ViewName = 'hoje' | 'reposicoes' | 'alunos' | 'relatorios' | 'config';

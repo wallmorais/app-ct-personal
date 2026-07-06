@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor, Palmtree, Plus, Pencil } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { AppData, ProfessorVacation } from '../types';
+import type { Session } from '@supabase/supabase-js';
+import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor, Palmtree, Plus, Pencil, Mail, Lock, Loader2, CheckCircle2, MapPin, Phone } from 'lucide-react';
+import { supabase, isSupabaseConfigured, traduzErroAuth } from '../lib/supabase';
+import type { AppData, Profile, ProfessorVacation } from '../types';
 import type { ThemePref } from '../lib/theme';
+import { updateProfile } from '../lib/supabaseRepo';
 import { findOverlappingVacation } from '../lib/periods';
 import {
   exportData,
@@ -30,6 +32,9 @@ interface Props {
   onTestNotification: () => void;
   themePref: ThemePref;
   onChangeTheme: (pref: ThemePref) => void;
+  profile: Profile | null;
+  onProfileChange: (p: Profile | null) => void;
+  session: Session | null;
 }
 
 const TEMA_OPCOES: { value: ThemePref; label: string; icon: typeof Sun }[] = [
@@ -210,6 +215,236 @@ function FeriasSection({ data, setData }: { data: AppData; setData: Props['setDa
   );
 }
 
+function ContaSection({ profile, onProfileChange, session }: { profile: Profile | null; onProfileChange: (p: Profile | null) => void; session: Session | null }) {
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [nome, setNome] = useState(profile?.nome ?? '');
+  const [telefone, setTelefone] = useState(profile?.telefone ?? '');
+  const [cidade, setCidade] = useState(profile?.cidade ?? '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const [changingEmail, setChangingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  async function handleSaveProfile() {
+    if (!profile) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const updated = { ...profile, nome: nome.trim(), telefone: telefone.trim(), cidade: cidade.trim() };
+      await updateProfile(updated);
+      onProfileChange(updated);
+      setEditingProfile(false);
+      setMsg({ type: 'ok', text: 'Perfil atualizado.' });
+    } catch {
+      setMsg({ type: 'err', text: 'Erro ao salvar perfil.' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    setPwMsg(null);
+    if (newPassword.length < 6) { setPwMsg({ type: 'err', text: 'Mínimo 6 caracteres.' }); return; }
+    if (newPassword !== confirmPw) { setPwMsg({ type: 'err', text: 'As senhas não coincidem.' }); return; }
+    setPwLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) { setPwMsg({ type: 'err', text: traduzErroAuth(error.message) }); }
+      else {
+        setPwMsg({ type: 'ok', text: 'Senha alterada com sucesso.' });
+        setNewPassword('');
+        setConfirmPw('');
+        setChangingPassword(false);
+      }
+    } catch {
+      setPwMsg({ type: 'err', text: 'Erro de conexão.' });
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
+  async function handleChangeEmail() {
+    setEmailMsg(null);
+    const trimmed = newEmail.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailMsg({ type: 'err', text: 'E-mail inválido.' });
+      return;
+    }
+    setEmailLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: trimmed });
+      if (error) { setEmailMsg({ type: 'err', text: traduzErroAuth(error.message) }); }
+      else {
+        setEmailMsg({ type: 'ok', text: 'Confira sua caixa de entrada para confirmar o novo e-mail.' });
+        setNewEmail('');
+        setChangingEmail(false);
+      }
+    } catch {
+      setEmailMsg({ type: 'err', text: 'Erro de conexão.' });
+    } finally {
+      setEmailLoading(false);
+    }
+  }
+
+  const userEmail = session?.user?.email ?? '';
+  const initials = (profile?.nome || userEmail).slice(0, 2).toUpperCase();
+
+  return (
+    <>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-base-muted px-1">Conta</p>
+
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-emerald/20 flex items-center justify-center text-emerald text-sm font-bold shrink-0">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold truncate">{profile?.nome || 'Sem nome'}</p>
+            <p className="text-xs text-base-muted truncate">{userEmail}</p>
+          </div>
+          {!editingProfile && (
+            <button onClick={() => { setEditingProfile(true); setMsg(null); }} className="text-xs font-semibold text-emerald active:opacity-70 shrink-0">
+              Editar
+            </button>
+          )}
+        </div>
+
+        {editingProfile && profile && (
+          <div className="space-y-2 pt-1">
+            <div>
+              <label htmlFor="profile-nome">Nome</label>
+              <div className="relative">
+                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-muted pointer-events-none" aria-hidden="true" />
+                <input id="profile-nome" type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="pl-9" placeholder="Seu nome" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="profile-telefone">Telefone</label>
+              <div className="relative">
+                <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-muted pointer-events-none" aria-hidden="true" />
+                <input id="profile-telefone" type="tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} className="pl-9" placeholder="(11) 99999-0000" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="profile-cidade">Cidade</label>
+              <div className="relative">
+                <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-muted pointer-events-none" aria-hidden="true" />
+                <input id="profile-cidade" type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} className="pl-9" placeholder="São Paulo" />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setEditingProfile(false)} className="flex-1 py-2 rounded-xl bg-base-card border border-base-border text-xs font-semibold active:bg-base-hover/5">
+                Cancelar
+              </button>
+              <button onClick={handleSaveProfile} disabled={saving} className="flex-1 py-2 rounded-xl bg-emerald text-black text-xs font-semibold active:bg-emerald/80 disabled:opacity-60 flex items-center justify-center gap-1.5">
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!editingProfile && profile && (profile.telefone || profile.cidade) && (
+          <div className="text-xs text-base-muted space-y-0.5 pt-1">
+            {profile.telefone && <p className="flex items-center gap-1.5"><Phone size={12} /> {profile.telefone}</p>}
+            {profile.cidade && <p className="flex items-center gap-1.5"><MapPin size={12} /> {profile.cidade}</p>}
+          </div>
+        )}
+
+        {msg && (
+          <p className={`text-xs px-3 py-2 rounded-xl ${msg.type === 'ok' ? 'text-emerald bg-emerald/10 border border-emerald/20' : 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20'}`}>
+            {msg.type === 'ok' && <CheckCircle2 size={13} className="inline mr-1 -mt-0.5" />}
+            {msg.text}
+          </p>
+        )}
+      </section>
+
+      {/* Alterar senha */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <button
+          onClick={() => { setChangingPassword(!changingPassword); setPwMsg(null); }}
+          className="w-full flex items-center gap-2 text-left"
+        >
+          <Lock size={16} className="text-electric shrink-0" />
+          <span className="text-sm font-semibold flex-1">Alterar senha</span>
+          <span className="text-xs text-base-muted">{changingPassword ? '▲' : '▼'}</span>
+        </button>
+        {changingPassword && (
+          <div className="space-y-2 pt-1">
+            <div>
+              <label htmlFor="new-pw">Nova senha</label>
+              <input id="new-pw" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div>
+              <label htmlFor="confirm-pw">Confirmar</label>
+              <input id="confirm-pw" type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repita a nova senha" />
+            </div>
+            <button onClick={handleChangePassword} disabled={pwLoading} className="w-full py-2 rounded-xl bg-emerald text-black text-xs font-semibold active:bg-emerald/80 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {pwLoading && <Loader2 size={14} className="animate-spin" />}
+              Salvar nova senha
+            </button>
+          </div>
+        )}
+        {pwMsg && (
+          <p className={`text-xs px-3 py-2 rounded-xl ${pwMsg.type === 'ok' ? 'text-emerald bg-emerald/10 border border-emerald/20' : 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20'}`}>
+            {pwMsg.text}
+          </p>
+        )}
+      </section>
+
+      {/* Alterar e-mail */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+        <button
+          onClick={() => { setChangingEmail(!changingEmail); setEmailMsg(null); }}
+          className="w-full flex items-center gap-2 text-left"
+        >
+          <Mail size={16} className="text-electric shrink-0" />
+          <span className="text-sm font-semibold flex-1">Alterar e-mail</span>
+          <span className="text-xs text-base-muted">{changingEmail ? '▲' : '▼'}</span>
+        </button>
+        <p className="text-xs text-base-muted">Atual: {userEmail}</p>
+        {changingEmail && (
+          <div className="space-y-2 pt-1">
+            <div>
+              <label htmlFor="new-email">Novo e-mail</label>
+              <input id="new-email" type="email" autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="novo@email.com" />
+            </div>
+            <button onClick={handleChangeEmail} disabled={emailLoading} className="w-full py-2 rounded-xl bg-emerald text-black text-xs font-semibold active:bg-emerald/80 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {emailLoading && <Loader2 size={14} className="animate-spin" />}
+              Alterar e-mail
+            </button>
+          </div>
+        )}
+        {emailMsg && (
+          <p className={`text-xs px-3 py-2 rounded-xl ${emailMsg.type === 'ok' ? 'text-emerald bg-emerald/10 border border-emerald/20' : 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20'}`}>
+            {emailMsg.text}
+          </p>
+        )}
+      </section>
+
+      {/* Sair */}
+      <section className="bg-base-card border border-base-border rounded-2xl p-4">
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-semibold active:bg-red-500/20"
+        >
+          <LogOut size={17} />
+          Sair da conta
+        </button>
+      </section>
+    </>
+  );
+}
+
 export default function ConfigView({
   data,
   setData,
@@ -217,6 +452,9 @@ export default function ConfigView({
   onTestNotification,
   themePref,
   onChangeTheme,
+  profile,
+  onProfileChange,
+  session,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [permission, setPermission] = useState<NotificationPermissionState>(() =>
@@ -501,17 +739,9 @@ export default function ConfigView({
         />
       </section>
 
-      {/* Sair da conta */}
-      {isSupabaseConfigured && (
-        <section className="bg-base-card border border-base-border rounded-2xl p-4">
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-semibold active:bg-red-500/20"
-          >
-            <LogOut size={17} />
-            Sair da conta
-          </button>
-        </section>
+      {/* ═══════════ GRUPO: CONTA ═══════════ */}
+      {isSupabaseConfigured && session && (
+        <ContaSection profile={profile} onProfileChange={onProfileChange} session={session} />
       )}
 
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}

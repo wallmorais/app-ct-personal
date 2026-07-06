@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Mail, Lock, ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Eye, EyeOff, User } from 'lucide-react';
 import { supabase, isSupabaseConfigured, traduzErroAuth } from '../lib/supabase';
 import { Logo } from './Logo';
 
-type Mode = 'login' | 'forgot';
+type Mode = 'login' | 'signup' | 'forgot';
 
 function isEmailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -11,8 +11,10 @@ function isEmailValido(email: string): boolean {
 
 export default function AuthView() {
   const [mode, setMode] = useState<Mode>('login');
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
@@ -27,13 +29,19 @@ export default function AuthView() {
     setMode(novo);
     limparMensagens();
     setPassword('');
+    setConfirmPassword('');
   }
 
   function validar(): string | null {
+    if (mode === 'signup' && !nome.trim()) return 'Informe seu nome.';
     if (!email.trim()) return 'Informe seu e-mail.';
     if (!isEmailValido(email.trim())) return 'E-mail inválido.';
-    if (mode !== 'forgot') {
-      if (!password) return 'Informe sua senha.';
+    if (mode === 'forgot') return null;
+    if (!password) return 'Informe sua senha.';
+    if (password.length < 6) return 'A senha deve ter pelo menos 6 caracteres.';
+    if (mode === 'signup') {
+      if (!confirmPassword) return 'Confirme sua senha.';
+      if (password !== confirmPassword) return 'As senhas não coincidem.';
     }
     return null;
   }
@@ -62,6 +70,20 @@ export default function AuthView() {
           password,
         });
         if (error) setErro(traduzErroAuth(error.message));
+      } else if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { nome: nome.trim() },
+            emailRedirectTo: window.location.origin,
+          },
+        });
+        if (error) {
+          setErro(traduzErroAuth(error.message));
+        } else {
+          setSucesso('Conta criada! Verifique seu e-mail e clique no link de confirmação para ativar sua conta.');
+        }
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: window.location.origin,
@@ -79,7 +101,7 @@ export default function AuthView() {
     }
   }
 
-  const titulo = mode === 'login' ? 'Entrar' : 'Redefinir senha';
+  const titulo = mode === 'login' ? 'Entrar' : mode === 'signup' ? 'Criar conta' : 'Redefinir senha';
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-base-bg flex">
@@ -105,7 +127,7 @@ export default function AuthView() {
               feito para o dia a dia do personal trainer.
             </p>
           </div>
-          <p className="text-xs text-base-muted">© {new Date().getFullYear()} Wal Morais — Personal Trainer</p>
+          <p className="text-xs text-base-muted">© {new Date().getFullYear()} PT.Control</p>
         </div>
       </div>
 
@@ -118,7 +140,7 @@ export default function AuthView() {
           </div>
 
           <div className="bg-base-card border border-base-border rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/20">
-            {mode === 'forgot' && (
+            {(mode === 'forgot' || mode === 'signup') && (
               <button
                 type="button"
                 onClick={() => trocarModo('login')}
@@ -131,6 +153,7 @@ export default function AuthView() {
             <h2 className="text-xl font-bold mb-1">{titulo}</h2>
             <p className="text-sm text-base-muted mb-5">
               {mode === 'login' && 'Acesse sua conta para gerenciar suas aulas.'}
+              {mode === 'signup' && 'Crie sua conta para começar a usar o PT.Control.'}
               {mode === 'forgot' && 'Informe seu e-mail e enviaremos um link de redefinição.'}
             </p>
 
@@ -148,6 +171,34 @@ export default function AuthView() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {mode === 'signup' && (
+                <div>
+                  <label htmlFor="auth-nome">Nome completo</label>
+                  <div className="relative">
+                    <User
+                      size={15}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-base-muted pointer-events-none"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="auth-nome"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      aria-label="Nome completo"
+                      value={nome}
+                      onChange={(e) => {
+                        setNome(e.target.value);
+                        if (erro) setErro('');
+                      }}
+                      disabled={loading}
+                      placeholder="Seu nome completo"
+                      className="pl-9 disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="auth-email">E-mail</label>
                 <div className="relative">
@@ -187,7 +238,7 @@ export default function AuthView() {
                     <input
                       id="auth-password"
                       type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                       required
                       aria-label="Senha"
                       value={password}
@@ -196,7 +247,7 @@ export default function AuthView() {
                         if (erro) setErro('');
                       }}
                       disabled={loading}
-                      placeholder="••••••••"
+                      placeholder={mode === 'signup' ? 'Mínimo 6 caracteres' : '••••••••'}
                       className="pl-9 pr-10 disabled:opacity-60"
                     />
                     <button
@@ -208,6 +259,34 @@ export default function AuthView() {
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {mode === 'signup' && (
+                <div>
+                  <label htmlFor="auth-confirm">Confirmar senha</label>
+                  <div className="relative">
+                    <Lock
+                      size={15}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-base-muted pointer-events-none"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="auth-confirm"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      aria-label="Confirmar senha"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (erro) setErro('');
+                      }}
+                      disabled={loading}
+                      placeholder="Repita a senha"
+                      className="pl-9 disabled:opacity-60"
+                    />
                   </div>
                 </div>
               )}
@@ -246,9 +325,22 @@ export default function AuthView() {
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald text-black text-sm font-semibold active:bg-emerald/80 hover:bg-emerald/90 transition-colors disabled:opacity-60"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
-                {mode === 'login' ? 'Entrar' : 'Enviar link de redefinição'}
+                {mode === 'login' ? 'Entrar' : mode === 'signup' ? 'Criar conta' : 'Enviar link de redefinição'}
               </button>
             </form>
+
+            {mode === 'login' && (
+              <p className="text-center text-xs text-base-muted mt-4">
+                Ainda não tem conta?{' '}
+                <button
+                  type="button"
+                  onClick={() => trocarModo('signup')}
+                  className="font-semibold text-emerald hover:underline"
+                >
+                  Criar conta
+                </button>
+              </p>
+            )}
           </div>
         </div>
       </div>

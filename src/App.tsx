@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import type { AppData, StatusAula, ViewName } from './types';
+import type { AppData, Profile, StatusAula, ViewName } from './types';
 import { loadData, saveData, runScheduledBackup } from './lib/storage';
+import { fetchAppData, persistAppData, fetchProfile } from './lib/supabaseRepo';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
 import { isProfessorOnVacation, isStudentActiveOnDate } from './lib/periods';
@@ -26,6 +27,10 @@ export default function App() {
   const [view, setView] = useState<ViewName>('hoje');
   const [forceAlert, setForceAlert] = useState(false);
   const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
+  const [remoteReady, setRemoteReady] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const syncedUserIdRef = useRef<string | null>(null);
+  const persistTimerRef = useRef<number | undefined>(undefined);
 
   // Aplica o tema escolhido e, no modo "sistema", reage à troca do SO.
   useEffect(() => {
@@ -64,7 +69,53 @@ export default function App() {
 
   useEffect(() => {
     saveData(data);
-  }, [data]);
+    if (!isSupabaseConfigured || !remoteReady) return;
+    if (typeof session !== 'object' || !session) return;
+    const userId = session.user.id;
+    window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      persistAppData(userId, data).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[PT.Control] Falha ao sincronizar com Supabase:', err);
+      });
+    }, 800);
+    return () => window.clearTimeout(persistTimerRef.current);
+  }, [data, remoteReady, session]);
+
+  // Ao autenticar, busca o AppData do Supabase (fonte de verdade) uma vez por sessão.
+  // Se o Supabase estiver vazio e existirem dados locais, faz o upload inicial (migração).
+  useEffect(() => {
+    if (!isSupabaseConfigured || typeof session !== 'object' || !session) return;
+    const userId = session.user.id;
+    if (syncedUserIdRef.current === userId) return;
+    syncedUserIdRef.current = userId;
+    setRemoteReady(false);
+
+    Promise.all([
+      fetchAppData(userId),
+      fetchProfile(userId),
+    ])
+      .then(async ([remote, prof]) => {
+        setProfile(prof);
+        if (remote) {
+          setData(remote);
+        } else {
+          const local = loadData();
+          const hasLocalData = local.alunos.length > 0 || local.registros.length > 0;
+          if (hasLocalData) {
+            // eslint-disable-next-line no-console
+            console.info('[PT.Control] Supabase vazio — enviando dados locais (migração inicial)');
+            await persistAppData(userId, local);
+          }
+        }
+        setRemoteReady(true);
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[PT.Control] Falha ao carregar dados do Supabase, usando cópia local:', err);
+        setRemoteReady(true);
+      });
+  }, [session]);
 
   // Backup automático a cada 15 dias: roda na abertura do app.
   useEffect(() => {
@@ -206,8 +257,13 @@ export default function App() {
           className="lg:hidden no-print sticky top-0 z-20 bg-base-bg/95 backdrop-blur border-b border-base-border px-[max(1rem,env(safe-area-inset-left))] py-2.5"
           style={{ paddingTop: 'calc(0.625rem + env(safe-area-inset-top))' }}
         >
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
             <Logo variant="light" height={40} />
+            {profile?.nome && (
+              <p className="text-xs text-base-muted truncate ml-3">
+                Olá, <span className="font-semibold text-base-fg">{profile.nome.split(' ')[0]}</span>
+              </p>
+            )}
           </div>
         </header>
 
@@ -230,6 +286,9 @@ export default function App() {
               onTestNotification={() => setForceAlert(true)}
               themePref={themePref}
               onChangeTheme={changeTheme}
+              profile={profile}
+              onProfileChange={setProfile}
+              session={typeof session === 'object' ? session : null}
             />
           )}
         </main>

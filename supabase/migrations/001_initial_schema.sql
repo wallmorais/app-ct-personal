@@ -17,7 +17,7 @@ $$ language plpgsql;
 -- TABELAS
 -- ============================================================
 
-create table public.alunos (
+create table if not exists public.alunos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   nome text not null,
@@ -34,7 +34,7 @@ create table public.alunos (
   updated_at timestamptz not null default now()
 );
 
-create table public.aula_slots (
+create table if not exists public.aula_slots (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   horario text not null,
@@ -43,7 +43,7 @@ create table public.aula_slots (
   updated_at timestamptz not null default now()
 );
 
-create table public.student_schedules (
+create table if not exists public.student_schedules (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   aluno_id uuid not null references public.alunos(id) on delete cascade,
@@ -53,7 +53,7 @@ create table public.student_schedules (
   updated_at timestamptz not null default now()
 );
 
-create table public.registros (
+create table if not exists public.registros (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   aluno_id uuid not null references public.alunos(id) on delete cascade,
@@ -72,7 +72,7 @@ create table public.registros (
   updated_at timestamptz not null default now()
 );
 
-create table public.pagamentos (
+create table if not exists public.pagamentos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   aluno_id uuid not null references public.alunos(id) on delete cascade,
@@ -85,7 +85,7 @@ create table public.pagamentos (
   updated_at timestamptz not null default now()
 );
 
-create table public.ferias_professor (
+create table if not exists public.ferias_professor (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   data_inicio date not null,
@@ -94,7 +94,7 @@ create table public.ferias_professor (
   created_at timestamptz not null default now()
 );
 
-create table public.matriculas (
+create table if not exists public.matriculas (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   aluno_id uuid not null references public.alunos(id) on delete cascade,
@@ -105,7 +105,7 @@ create table public.matriculas (
   created_at timestamptz not null default now()
 );
 
-create table public.config (
+create table if not exists public.config (
   user_id uuid primary key references auth.users(id) on delete cascade,
   notification_time text not null default '21:00',
   nome_profissional text not null default '',
@@ -117,22 +117,22 @@ create table public.config (
 -- ÍNDICES
 -- ============================================================
 
-create index idx_alunos_user on public.alunos(user_id);
-create index idx_slots_user on public.aula_slots(user_id);
-create index idx_schedules_user on public.student_schedules(user_id);
-create index idx_schedules_aluno on public.student_schedules(aluno_id);
-create index idx_schedules_slot on public.student_schedules(slot_id);
-create index idx_registros_user on public.registros(user_id);
-create index idx_registros_data on public.registros(data);
-create index idx_registros_aluno on public.registros(aluno_id);
-create index idx_registros_reposicao on public.registros(reposicao_data) where reposicao_data is not null;
-create index idx_pagamentos_user on public.pagamentos(user_id);
-create index idx_pagamentos_aluno on public.pagamentos(aluno_id);
-create index idx_pagamentos_mes on public.pagamentos(mes);
-create index idx_ferias_user on public.ferias_professor(user_id);
-create index idx_ferias_periodo on public.ferias_professor(data_inicio, data_fim);
-create index idx_matriculas_user on public.matriculas(user_id);
-create index idx_matriculas_aluno on public.matriculas(aluno_id);
+create index if not exists idx_alunos_user on public.alunos(user_id);
+create index if not exists idx_slots_user on public.aula_slots(user_id);
+create index if not exists idx_schedules_user on public.student_schedules(user_id);
+create index if not exists idx_schedules_aluno on public.student_schedules(aluno_id);
+create index if not exists idx_schedules_slot on public.student_schedules(slot_id);
+create index if not exists idx_registros_user on public.registros(user_id);
+create index if not exists idx_registros_data on public.registros(data);
+create index if not exists idx_registros_aluno on public.registros(aluno_id);
+create index if not exists idx_registros_reposicao on public.registros(reposicao_data) where reposicao_data is not null;
+create index if not exists idx_pagamentos_user on public.pagamentos(user_id);
+create index if not exists idx_pagamentos_aluno on public.pagamentos(aluno_id);
+create index if not exists idx_pagamentos_mes on public.pagamentos(mes);
+create index if not exists idx_ferias_user on public.ferias_professor(user_id);
+create index if not exists idx_ferias_periodo on public.ferias_professor(data_inicio, data_fim);
+create index if not exists idx_matriculas_user on public.matriculas(user_id);
+create index if not exists idx_matriculas_aluno on public.matriculas(aluno_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)
