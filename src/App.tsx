@@ -29,6 +29,7 @@ export default function App() {
   const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
   const [remoteReady, setRemoteReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
   const syncedUserIdRef = useRef<string | null>(null);
   const persistTimerRef = useRef<number | undefined>(undefined);
   const pendingDataRef = useRef<{ userId: string; data: AppData } | null>(null);
@@ -69,35 +70,60 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Cache local sempre atualizado primeiro (para offline/reload instantâneo).
     saveData(data);
     if (!isSupabaseConfigured || !remoteReady) return;
     if (typeof session !== 'object' || !session) return;
     const userId = session.user.id;
     pendingDataRef.current = { userId, data };
+    setSyncStatus('syncing');
     window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
-      pendingDataRef.current = null;
-      persistAppData(userId, data).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('[PT.Control] Falha ao sincronizar com Supabase:', err);
-      });
-    }, 800);
+      const snapshot = data;
+      persistAppData(userId, snapshot)
+        .then(() => {
+          // Só limpa o pendente se nada novo entrou depois deste snapshot.
+          if (pendingDataRef.current?.data === snapshot) pendingDataRef.current = null;
+          setSyncStatus('saved');
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[PT.Control] ❌ Falha ao sincronizar com Supabase:', err?.message ?? err);
+          setSyncStatus('error');
+        });
+    }, 500);
     return () => window.clearTimeout(persistTimerRef.current);
   }, [data, remoteReady, session]);
 
   // Flush pendente ao fechar/recarregar a aba — garante que o último estado
-  // chegue ao Supabase mesmo que o debounce de 800ms ainda não tenha disparado.
+  // chegue ao Supabase mesmo que o debounce ainda não tenha disparado.
+  // Usa fetch com keepalive: o navegador conclui a requisição mesmo após o
+  // unload da página (o supabase.rpc normal seria abortado).
   useEffect(() => {
     function flushBeforeUnload() {
       const pending = pendingDataRef.current;
-      if (!pending) return;
+      if (!pending || typeof session !== 'object' || !session) return;
       pendingDataRef.current = null;
       window.clearTimeout(persistTimerRef.current);
-      persistAppData(pending.userId, pending.data).catch(() => {});
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/persist_app_data`;
+      fetch(url, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ payload: pending.data }),
+      }).catch(() => {});
     }
+    window.addEventListener('pagehide', flushBeforeUnload);
     window.addEventListener('beforeunload', flushBeforeUnload);
-    return () => window.removeEventListener('beforeunload', flushBeforeUnload);
-  }, []);
+    return () => {
+      window.removeEventListener('pagehide', flushBeforeUnload);
+      window.removeEventListener('beforeunload', flushBeforeUnload);
+    };
+  }, [session]);
 
   // Ao autenticar, busca o AppData do Supabase (fonte de verdade) uma vez por sessão.
   // Se o Supabase estiver vazio e existirem dados locais, faz o upload inicial (migração).
@@ -115,22 +141,29 @@ export default function App() {
       .then(async ([remote, prof]) => {
         setProfile(prof);
         if (remote) {
+          // Supabase é a fonte de verdade: sempre usa os dados do banco.
+          console.info('[PT.Control] 🔵 Usando dados do Supabase (fonte de verdade).');
           setData(remote);
         } else {
           const local = loadData();
           const hasLocalData = local.alunos.length > 0 || local.registros.length > 0;
           if (hasLocalData) {
+            // Primeiro acesso com dados locais pendentes → sobe para o banco.
+            console.info('[PT.Control] ⬆️ Enviando dados locais para o Supabase (migração inicial).');
             await persistAppData(userId, local);
             setData(local);
           } else {
+            console.info('[PT.Control] 🆕 Conta nova — iniciando base vazia.');
             setData(emptyAppData());
           }
         }
         setRemoteReady(true);
       })
       .catch((err) => {
+        // Sem conexão / Supabase indisponível: cai para o cache local.
         // eslint-disable-next-line no-console
-        console.error('[PT.Control] Falha ao carregar dados do Supabase, usando cópia local:', err);
+        console.error('[PT.Control] ⚠️ Falha ao carregar do Supabase, usando cache local:', err?.message ?? err);
+        setSyncStatus('error');
         setRemoteReady(true);
       });
   }, [session]);
@@ -266,6 +299,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-base-bg flex lg:flex-row">
+      <SyncIndicator status={syncStatus} onRetry={() => setData((d) => ({ ...d }))} />
       <div className="no-print">
         <SidebarNav view={view} onChange={setView} />
       </div>
@@ -315,6 +349,59 @@ export default function App() {
           <BottomNav view={view} onChange={setView} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Indicador de sincronização com o Supabase. Fica escondido quando ocioso ou
+// logo após salvar; só chama atenção enquanto salva ou quando falha (com botão
+// para tentar de novo). É a garantia visual de que os dados chegaram ao banco.
+function SyncIndicator({
+  status,
+  onRetry,
+}: {
+  status: 'idle' | 'syncing' | 'saved' | 'error';
+  onRetry: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (status === 'saved') {
+      setVisible(true);
+      const id = window.setTimeout(() => setVisible(false), 1800);
+      return () => window.clearTimeout(id);
+    }
+    setVisible(status === 'syncing' || status === 'error');
+  }, [status]);
+
+  if (!visible) return null;
+
+  const base =
+    'no-print fixed z-50 bottom-24 lg:bottom-6 right-4 flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-medium shadow-lg';
+
+  if (status === 'error') {
+    return (
+      <div className={`${base} bg-red-600 text-white`} role="alert">
+        <span>Erro ao salvar</span>
+        <button onClick={onRetry} className="underline font-semibold">
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'saved') {
+    return (
+      <div className={`${base} bg-emerald text-black`} role="status">
+        Salvo ✓
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${base} bg-base-card border border-base-border text-base-fg`} role="status">
+      <span className="w-3 h-3 border-2 border-emerald border-t-transparent rounded-full animate-spin" />
+      Salvando…
     </div>
   );
 }

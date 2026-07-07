@@ -26,7 +26,16 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
     (registrosRes.data?.length ?? 0) === 0 &&
     !configRes.data;
 
-  if (isEmpty) return null;
+  if (isEmpty) {
+    console.info('[PT.Control] 📭 Supabase vazio para este usuário.');
+    return null;
+  }
+
+  console.info('[PT.Control] 📥 Dados carregados do Supabase:', {
+    alunos: alunosRes.data?.length ?? 0,
+    registros: registrosRes.data?.length ?? 0,
+    slots: slotsRes.data?.length ?? 0,
+  });
 
   const cfg = configRes.data;
 
@@ -101,10 +110,19 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
 
 /** Persist atômico via RPC — tudo numa única transaction no Postgres. */
 export async function persistAppData(_userId: string, data: AppData): Promise<void> {
+  console.info('[PT.Control] ⏳ Persistindo no Supabase…', {
+    alunos: data.alunos.length,
+    registros: data.registros.length,
+    slots: data.slots.length,
+  });
   const { error } = await supabase.rpc('persist_app_data', {
     payload: data,
   });
-  if (error) throw error;
+  if (error) {
+    console.error('[PT.Control] ❌ RPC persist_app_data falhou:', error.message, error);
+    throw error;
+  }
+  console.info('[PT.Control] ✅ Dados persistidos no Supabase.');
 }
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
