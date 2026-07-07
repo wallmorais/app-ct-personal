@@ -31,6 +31,7 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const syncedUserIdRef = useRef<string | null>(null);
   const persistTimerRef = useRef<number | undefined>(undefined);
+  const pendingDataRef = useRef<{ userId: string; data: AppData } | null>(null);
 
   // Aplica o tema escolhido e, no modo "sistema", reage à troca do SO.
   useEffect(() => {
@@ -72,8 +73,10 @@ export default function App() {
     if (!isSupabaseConfigured || !remoteReady) return;
     if (typeof session !== 'object' || !session) return;
     const userId = session.user.id;
+    pendingDataRef.current = { userId, data };
     window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
+      pendingDataRef.current = null;
       persistAppData(userId, data).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[PT.Control] Falha ao sincronizar com Supabase:', err);
@@ -81,6 +84,20 @@ export default function App() {
     }, 800);
     return () => window.clearTimeout(persistTimerRef.current);
   }, [data, remoteReady, session]);
+
+  // Flush pendente ao fechar/recarregar a aba — garante que o último estado
+  // chegue ao Supabase mesmo que o debounce de 800ms ainda não tenha disparado.
+  useEffect(() => {
+    function flushBeforeUnload() {
+      const pending = pendingDataRef.current;
+      if (!pending) return;
+      pendingDataRef.current = null;
+      window.clearTimeout(persistTimerRef.current);
+      persistAppData(pending.userId, pending.data).catch(() => {});
+    }
+    window.addEventListener('beforeunload', flushBeforeUnload);
+    return () => window.removeEventListener('beforeunload', flushBeforeUnload);
+  }, []);
 
   // Ao autenticar, busca o AppData do Supabase (fonte de verdade) uma vez por sessão.
   // Se o Supabase estiver vazio e existirem dados locais, faz o upload inicial (migração).
@@ -100,7 +117,14 @@ export default function App() {
         if (remote) {
           setData(remote);
         } else {
-          setData(emptyAppData());
+          const local = loadData();
+          const hasLocalData = local.alunos.length > 0 || local.registros.length > 0;
+          if (hasLocalData) {
+            await persistAppData(userId, local);
+            setData(local);
+          } else {
+            setData(emptyAppData());
+          }
         }
         setRemoteReady(true);
       })
