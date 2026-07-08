@@ -329,7 +329,7 @@ export default function App() {
           {view === 'hoje' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
           {view === 'reposicoes' && <ReposicoesView data={data} onUpdateRegistro={updateRegistro} />}
           {view === 'alunos' && <AlunosView data={data} setData={setData} />}
-          {view === 'relatorios' && <RelatoriosView data={data} />}
+          {view === 'relatorios' && <RelatoriosView data={data} profile={profile} />}
           {view === 'config' && (
             <ConfigView
               data={data}

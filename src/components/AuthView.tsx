@@ -153,9 +153,10 @@ export default function AuthView() {
       {/* Coluna direita — formulário */}
       <div className="flex-1 flex items-center justify-center px-5 py-8">
         <div className="w-full max-w-sm">
-          {/* Logo no topo (somente mobile/tablet) */}
-          <div className="flex justify-center mb-8 lg:hidden">
-            <Logo variant="light" height={44} />
+          {/* Marca no topo (somente mobile/tablet) */}
+          <div className="flex flex-col items-center gap-1.5 mb-8 lg:hidden">
+            <Logo variant="light" height={52} />
+            <p className="text-xs text-base-muted">Gestão inteligente para Personal Trainers</p>
           </div>
 
           <div className="bg-base-card border border-base-border rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/20">

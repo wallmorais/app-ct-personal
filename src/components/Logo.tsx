@@ -1,43 +1,27 @@
-import { useState } from 'react';
-
 interface LogoProps {
-  /** Mantido por compatibilidade com chamadas existentes; ambos usam a mesma logo original. */
+  /** 'light' = uso sobre fundo escuro (app); 'dark' = uso sobre fundo claro (PDF/impressão). */
   variant?: 'light' | 'dark';
-  /** Altura da imagem em pixels. */
+  /** Altura de referência em pixels (controla o tamanho da fonte). */
   height?: number;
   className?: string;
 }
 
 /**
- * Renderiza a logomarca ORIGINAL (sem nenhuma alteração) a partir de
- * /public/logo.png. Use a versão TEAL da logo (fundo transparente), que
- * fica legível tanto no tema escuro do app quanto no fundo branco do PDF.
- *
- * Enquanto o arquivo não existir, mostra apenas um texto simples — nenhuma
- * recriação/aproximação da marca é desenhada.
+ * Wordmark do produto: "PT.Control".
+ * A identidade exibida é sempre a marca do sistema — nunca o nome do
+ * desenvolvedor ou de um professor específico. Créditos ao desenvolvedor
+ * ficam apenas na seção "Sobre" (Config).
  */
 export function Logo({ variant = 'light', height = 44, className }: LogoProps) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    const textColor = variant === 'light' ? 'text-brand-light' : 'text-brand';
-    return (
-      <span
-        className={`font-extrabold tracking-tight ${textColor} ${className ?? ''}`}
-        style={{ fontSize: height * 0.4 }}
-      >
-        WAL MORAIS
-      </span>
-    );
-  }
-
+  const accent = variant === 'light' ? 'text-brand-light' : 'text-brand';
+  const base = variant === 'light' ? 'text-base-fg' : 'text-slate-900';
   return (
-    <img
-      src="/logo.png"
-      alt="Wal Morais — Personal Trainer"
-      style={{ height, width: 'auto' }}
-      className={className}
-      onError={() => setFailed(true)}
-    />
+    <span
+      className={`font-extrabold tracking-tight leading-none select-none ${className ?? ''}`}
+      style={{ fontSize: Math.round(height * 0.45) }}
+    >
+      <span className={base}>PT</span>
+      <span className={accent}>.Control</span>
+    </span>
   );
 }

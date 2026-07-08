@@ -44,7 +44,7 @@ export function loadData(): AppData {
     if (!parsed.alunos || !parsed.slots || !parsed.registros || !parsed.config) {
       throw new Error('formato inválido');
     }
-    parsed.config.nomeProfissional ??= 'Wal Morais';
+    parsed.config.nomeProfissional ??= '';
     parsed.config.registroProfissional ??= 'Personal Trainer';
     parsed.pagamentos ??= [];
     parsed.feriasProfessor ??= [];

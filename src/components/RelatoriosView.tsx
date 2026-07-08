@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, Palmtree, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { AppData } from '../types';
+import type { AppData, Profile } from '../types';
 import { formatDateLabel, monthLabel, startOfMonth, shiftMonth, addDays } from '../lib/date';
 import { getEnrollmentsForStudent, getVacationsInRange } from '../lib/periods';
 import {
@@ -17,6 +17,8 @@ import { Logo } from './Logo';
 
 interface Props {
   data: AppData;
+  /** Perfil do professor autenticado (tabela profiles) — fonte primária do nome no relatório. */
+  profile?: Profile | null;
 }
 
 
@@ -276,8 +278,9 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
   );
 }
 
-export default function RelatoriosView({ data }: Props) {
-  const nomeProfissional = data.config.nomeProfissional;
+export default function RelatoriosView({ data, profile }: Props) {
+  // Prioridade: perfil do usuário autenticado → configuração do professor.
+  const nomeProfissional = profile?.nome?.trim() || data.config.nomeProfissional || 'Professor(a)';
   const registroProfissional = data.config.registroProfissional;
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
@@ -382,7 +385,7 @@ export default function RelatoriosView({ data }: Props) {
           }}
         >
           <div>
-            <strong>Profissional:</strong> {nomeProfissional}
+            <strong>Professor:</strong> {nomeProfissional}
           </div>
           <div>
             <strong>Período:</strong> {formatPeriodo(range)}

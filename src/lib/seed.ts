@@ -43,7 +43,7 @@ export function buildSeedData(): AppData {
     matriculas: [],
     config: {
       notificationTime: '21:00',
-      nomeProfissional: 'Wal Morais',
+      nomeProfissional: 'Professor(a) Demo',
       registroProfissional: 'Personal Trainer',
     },
   };

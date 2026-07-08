@@ -102,7 +102,7 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
     })),
     config: {
       notificationTime: cfg?.notification_time ?? '21:00',
-      nomeProfissional: cfg?.nome_profissional ?? 'Wal Morais',
+      nomeProfissional: cfg?.nome_profissional ?? '',
       registroProfissional: cfg?.registro_profissional ?? 'Personal Trainer',
     },
   };
