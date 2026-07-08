@@ -19,6 +19,7 @@ import ConfigView from './components/ConfigView';
 import AuthView from './components/AuthView';
 import ResetPasswordView from './components/ResetPasswordView';
 import { Logo } from './components/Logo';
+import UserMenu from './components/UserMenu';
 
 export default function App() {
   const [session, setSession] = useState<Session | null | 'loading'>('loading');
@@ -301,7 +302,12 @@ export default function App() {
     <div className="min-h-screen min-h-[100dvh] bg-base-bg flex lg:flex-row">
       <SyncIndicator status={syncStatus} onRetry={() => setData((d) => ({ ...d }))} />
       <div className="no-print">
-        <SidebarNav view={view} onChange={setView} />
+        <SidebarNav
+          view={view}
+          onChange={setView}
+          profile={profile}
+          email={typeof session === 'object' && session ? session.user.email ?? '' : ''}
+        />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -311,10 +317,12 @@ export default function App() {
         >
           <div className="max-w-2xl mx-auto flex items-center justify-between">
             <Logo variant="light" height={40} />
-            {profile?.nome && (
-              <p className="text-xs text-base-muted truncate ml-3">
-                Olá, <span className="font-semibold text-base-fg">{profile.nome.split(' ')[0]}</span>
-              </p>
+            {isSupabaseConfigured && typeof session === 'object' && session && (
+              <UserMenu
+                profile={profile}
+                email={session.user.email ?? ''}
+                onNavigate={setView}
+              />
             )}
           </div>
         </header>
