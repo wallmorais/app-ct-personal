@@ -348,15 +348,15 @@ export default function RelatoriosView({ data, profile }: Props) {
   );
 
   const feriasAlunosNoPeriodo = useMemo(() => {
-    return data.alunos
-      .map((aluno) => ({
+    return listaAtiva
+      .map(({ aluno }) => ({
         aluno,
         periodos: getEnrollmentsForStudent(data, aluno.id).filter(
           (e) => e.tipo === 'FERIAS' && e.dataInicio <= range.end && (!e.dataFim || e.dataFim >= range.start),
         ),
       }))
       .filter((x) => x.periodos.length > 0);
-  }, [data, range]);
+  }, [listaAtiva, data, range]);
 
   const temFeriasNoPeriodo = feriasProfessorNoPeriodo.length > 0 || feriasAlunosNoPeriodo.length > 0;
 
