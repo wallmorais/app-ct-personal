@@ -146,7 +146,7 @@ export default function AuthView() {
               feito para o dia a dia do personal trainer.
             </p>
           </div>
-          <p className="text-xs text-base-muted">© {new Date().getFullYear()} PT.Control</p>
+          <p className="text-xs text-base-muted">© {new Date().getFullYear()} Controle Personal</p>
         </div>
       </div>
 
@@ -173,7 +173,7 @@ export default function AuthView() {
             <h2 className="text-xl font-bold mb-1">{titulo}</h2>
             <p className="text-sm text-base-muted mb-5">
               {mode === 'login' && 'Acesse sua conta para gerenciar suas aulas.'}
-              {mode === 'signup' && 'Crie sua conta para começar a usar o PT.Control.'}
+              {mode === 'signup' && 'Crie sua conta para começar a usar o Controle Personal.'}
               {mode === 'forgot' && 'Informe seu e-mail e enviaremos um link de redefinição.'}
             </p>
 

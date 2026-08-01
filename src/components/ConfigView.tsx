@@ -746,8 +746,8 @@ export default function ConfigView({
 
       {/* ═══════════ SOBRE ═══════════ */}
       <footer className="text-center text-xs text-base-muted pt-2 pb-4 space-y-0.5">
-        <p className="font-semibold text-base-fg">PT.Control</p>
-        <p>© {new Date().getFullYear()} PT.Control · Desenvolvido por Wal Morais</p>
+        <p className="font-semibold text-base-fg">Controle Personal</p>
+        <p>© {new Date().getFullYear()} Controle Personal · Desenvolvido por Wal Morais</p>
       </footer>
 
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}

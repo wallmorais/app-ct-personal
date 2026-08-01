@@ -43,7 +43,7 @@ export function sendReminderNotification(count: number): boolean {
   if (count <= 0) return false;
   if (getNotificationPermission() !== 'granted') return false;
 
-  const titulo = 'PT.Control — Lembrete diário';
+  const titulo = 'Controle Personal — Lembrete diário';
   const corpo =
     count === 1
       ? 'Você tem 1 aula de hoje sem check-in. Atualize a presença na aba Agenda.'

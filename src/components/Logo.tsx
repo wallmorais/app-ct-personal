@@ -7,7 +7,7 @@ interface LogoProps {
 }
 
 /**
- * Wordmark do produto: "PT.Control".
+ * Wordmark do produto: "Controle Personal".
  * A identidade exibida é sempre a marca do sistema — nunca o nome do
  * desenvolvedor ou de um professor específico. Créditos ao desenvolvedor
  * ficam apenas na seção "Sobre" (Config).
@@ -18,10 +18,9 @@ export function Logo({ variant = 'light', height = 44, className }: LogoProps) {
   return (
     <span
       className={`font-extrabold tracking-tight leading-none select-none ${className ?? ''}`}
-      style={{ fontSize: Math.round(height * 0.45) }}
+      style={{ fontSize: Math.round(height * 0.4) }}
     >
-      <span className={base}>PT</span>
-      <span className={accent}>.Control</span>
+      <span className={base}>Controle</span> <span className={accent}>Personal</span>
     </span>
   );
 }
