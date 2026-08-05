@@ -31,6 +31,7 @@ export default function App() {
   const [remoteReady, setRemoteReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const syncedUserIdRef = useRef<string | null>(null);
   const persistTimerRef = useRef<number | undefined>(undefined);
   const pendingDataRef = useRef<{ userId: string; data: AppData } | null>(null);
@@ -85,11 +86,20 @@ export default function App() {
         .then(() => {
           // Só limpa o pendente se nada novo entrou depois deste snapshot.
           if (pendingDataRef.current?.data === snapshot) pendingDataRef.current = null;
+          setSyncErrorMessage(null);
           setSyncStatus('saved');
         })
         .catch((err) => {
           // eslint-disable-next-line no-console
-          console.error('[PT.Control] ❌ Falha ao sincronizar com Supabase:', err?.message ?? err);
+          console.error('Erro Supabase:', err);
+          // eslint-disable-next-line no-console
+          console.error('Detalhes:', {
+            message: err?.message,
+            details: err?.details,
+            hint: err?.hint,
+            code: err?.code,
+          });
+          setSyncErrorMessage(err?.message || 'Erro ao salvar');
           setSyncStatus('error');
         });
     }, 500);
@@ -316,7 +326,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-base-bg flex lg:flex-row">
-      <SyncIndicator status={syncStatus} onRetry={() => setData((d) => ({ ...d }))} />
+      <SyncIndicator status={syncStatus} errorMessage={syncErrorMessage} onRetry={() => setData((d) => ({ ...d }))} />
       <div className="no-print">
         <SidebarNav
           view={view}
@@ -382,9 +392,11 @@ export default function App() {
 // para tentar de novo). É a garantia visual de que os dados chegaram ao banco.
 function SyncIndicator({
   status,
+  errorMessage,
   onRetry,
 }: {
   status: 'idle' | 'syncing' | 'saved' | 'error';
+  errorMessage?: string | null;
   onRetry: () => void;
 }) {
   const [visible, setVisible] = useState(false);

@@ -100,8 +100,14 @@ export default function AlunosView({ data, setData }: Props) {
         });
       }
 
-      // Remove orphan slots (no schedules referencing them)
-      const usedSlotIds = new Set(schedules.map((s) => s.slotId));
+      // Remove orphan slots — mas só se nenhum agendamento OU registro histórico ainda
+      // referencia o slot. Um slot sem agendamento ativo pode continuar sendo referenciado
+      // por aulas/reposições passadas; removê-lo quebraria a chave estrangeira registros.slot_id
+      // ao sincronizar com o Supabase (bug: "violates foreign key constraint registros_slot_id_fkey").
+      const usedSlotIds = new Set([
+        ...schedules.map((s) => s.slotId),
+        ...prev.registros.map((r) => r.slotId),
+      ]);
       slots = slots.filter((s) => usedSlotIds.has(s.id));
 
       // Rebuild enrollments from contract dates + vacations.
@@ -151,13 +157,19 @@ export default function AlunosView({ data, setData }: Props) {
   function handleDelete(id: string) {
     setData((prev) => {
       const schedules = prev.schedules.filter((s) => s.alunoId !== id);
-      const usedSlotIds = new Set(schedules.map((s) => s.slotId));
+      const registros = prev.registros.filter((r) => r.alunoId !== id);
+      // Mesma regra do handleSave: um slot só é removido se nenhum agendamento OU
+      // registro histórico restante (de outros alunos) ainda o referencia.
+      const usedSlotIds = new Set([
+        ...schedules.map((s) => s.slotId),
+        ...registros.map((r) => r.slotId),
+      ]);
       return {
         ...prev,
         alunos: prev.alunos.filter((a) => a.id !== id),
         slots: prev.slots.filter((s) => usedSlotIds.has(s.id)),
         schedules,
-        registros: prev.registros.filter((r) => r.alunoId !== id),
+        registros,
         matriculas: (prev.matriculas ?? []).filter((m) => m.alunoId !== id),
       };
     });
