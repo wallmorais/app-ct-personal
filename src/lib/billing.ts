@@ -1,5 +1,6 @@
 import type { AppData, Aluno, Registro, StatusAula } from '../types';
 import { addDays, shiftMonth, startOfMonth, todayISO } from './date';
+import { tipoMovimentacao } from './periods';
 
 export interface DateRange {
   start: string; // YYYY-MM-DD (inclusivo)
@@ -31,6 +32,8 @@ export interface AlunoStats {
   presencas: number;
   faltas: number;
   reposicoes: number;
+  /** Movimentações para uma data anterior à original (aula trazida para frente). */
+  antecipacoes: number;
   reposicaoStats: ReposicaoStats;
   totalPlano: number;
   taxaPresenca: number; // 0-100
@@ -41,6 +44,7 @@ export interface OverviewStats {
   totalPresencas: number;
   totalFaltas: number;
   totalReposicoes: number;
+  totalAntecipacoes: number;
   faturamentoTotal: number;
   porAluno: AlunoStats[];
 }
@@ -73,13 +77,22 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
   ).length;
   const faltas = faltasRegulares + faltasReposicao;
 
-  const reposicoesNoPeriodo = doAluno.filter(
+  const movimentacoesNoPeriodo = doAluno.filter(
     (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
   );
-  const reposicoes = reposicoesNoPeriodo.length;
+  // Reposições e antecipações são contabilizadas separadamente (mesmo campo de dados,
+  // tipo derivado por comparação de datas — reposicaoData anterior a data = antecipação).
+  const reposicoes = movimentacoesNoPeriodo.filter((r) => tipoMovimentacao(r) === 'reposicao').length;
+  const antecipacoes = movimentacoesNoPeriodo.filter((r) => tipoMovimentacao(r) === 'antecipacao').length;
 
-  const reposicaoStats: ReposicaoStats = { pendentes: 0, concluidas: 0, naoCompareceu: 0, canceladas: 0, total: reposicoes };
-  for (const r of reposicoesNoPeriodo) {
+  const reposicaoStats: ReposicaoStats = {
+    pendentes: 0,
+    concluidas: 0,
+    naoCompareceu: 0,
+    canceladas: 0,
+    total: movimentacoesNoPeriodo.length,
+  };
+  for (const r of movimentacoesNoPeriodo) {
     const rs = r.reposicaoStatus ?? 'pendente';
     if (rs === 'concluida') reposicaoStats.concluidas++;
     else if (rs === 'nao_compareceu') reposicaoStats.naoCompareceu++;
@@ -95,6 +108,7 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
     presencas,
     faltas,
     reposicoes,
+    antecipacoes,
     reposicaoStats,
     totalPlano: aluno.plano,
     taxaPresenca,
@@ -109,6 +123,7 @@ export function overviewStats(data: AppData, range: DateRange = currentMonthRang
     totalPresencas: porAluno.reduce((acc, s) => acc + s.presencas, 0),
     totalFaltas: porAluno.reduce((acc, s) => acc + s.faltas, 0),
     totalReposicoes: porAluno.reduce((acc, s) => acc + s.reposicoes, 0),
+    totalAntecipacoes: porAluno.reduce((acc, s) => acc + s.antecipacoes, 0),
     faturamentoTotal: porAluno.reduce((acc, s) => acc + s.faturamento, 0),
     porAluno,
   };

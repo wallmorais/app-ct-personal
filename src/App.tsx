@@ -229,7 +229,7 @@ export default function App() {
     dataAula: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('./types').StatusReposicao },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('./types').StatusReposicao },
     faltaObservacao?: string,
   ) {
     setData((prev) => {
@@ -240,6 +240,20 @@ export default function App() {
       const excecao = reposicao?.excecao?.length ? reposicao.excecao : undefined;
 
       const reposicaoStatus = reposicao ? (reposicao.reposicaoStatus ?? 'pendente') : undefined;
+
+      // Antecipação (reposicaoData anterior à data original) que não compareceu e está
+      // sendo remarcada para uma nova data: preserva a data da tentativa perdida, já
+      // que os dois campos escalares (reposicaoData/reposicaoHorario) seriam sobrescritos.
+      let dataOriginalAntecipacao = existing?.dataOriginalAntecipacao;
+      if (
+        existing?.reposicaoData &&
+        existing.reposicaoData < existing.data &&
+        existing.reposicaoStatus === 'nao_compareceu' &&
+        reposicao &&
+        reposicao.data !== existing.reposicaoData
+      ) {
+        dataOriginalAntecipacao = existing.reposicaoData;
+      }
 
       if (existing) {
         return {
@@ -254,6 +268,7 @@ export default function App() {
                   reposicaoStatus,
                   reposicaoExcecao: excecao,
                   faltaObservacao: observacao,
+                  dataOriginalAntecipacao,
                 }
               : r,
           ),
@@ -276,6 +291,7 @@ export default function App() {
             reposicaoStatus,
             reposicaoExcecao: excecao,
             faltaObservacao: observacao,
+            dataOriginalAntecipacao,
           },
         ],
       };

@@ -58,9 +58,18 @@ export interface Registro {
   reposicaoStatus?: StatusReposicao;
   /** Observação opcional registrada ao marcar falta (ex.: motivo, aviso prévio). */
   faltaObservacao?: string;
-  /** Exceções confirmadas pelo professor ao agendar reposição em período de férias. */
-  reposicaoExcecao?: ('ferias_professor' | 'ferias_aluno')[];
+  /** Exceções confirmadas pelo professor ao agendar reposição (férias ou conflito de horário). */
+  reposicaoExcecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[];
+  /**
+   * Preenchido apenas quando uma antecipação (reposicaoData anterior a `data`) falha
+   * — aluno não compareceu — e é remarcada para uma nova data. Guarda a data da
+   * tentativa de antecipação que ficou "no meio do caminho", para rastreabilidade.
+   */
+  dataOriginalAntecipacao?: string;
 }
+
+/** Tipo de movimentação derivado por comparação de datas — nunca persistido. */
+export type TipoMovimentacao = 'reposicao' | 'antecipacao';
 
 export interface FeriasPeriodo {
   inicio: string; // YYYY-MM-DD

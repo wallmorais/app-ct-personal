@@ -1,13 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findHorarioConflict,
   findOverlappingVacation,
   getStudentStatusOnDate,
   isProfessorOnVacation,
   isStudentActiveOnDate,
   isStudentOnVacation,
+  tipoMovimentacao,
   vacationsOverlap,
 } from './periods';
 import { buildAluno, buildEmptyData, uid } from './testFixtures';
+import type { Registro } from '../types';
+
+function buildRegistro(overrides: Partial<Registro> & Pick<Registro, 'alunoId'>): Registro {
+  return {
+    id: uid(),
+    slotId: 'slot-1',
+    data: '2026-07-10',
+    horario: '07:00',
+    status: 'pendente',
+    ...overrides,
+  };
+}
 
 describe('isProfessorOnVacation', () => {
   it('detecta data dentro de um período de férias', () => {
@@ -127,4 +141,102 @@ describe('ciclo de vida do aluno — getStudentStatusOnDate / isStudentActiveOnD
       expect(statusNoGap).toBe(true);
     },
   );
+});
+
+describe('tipoMovimentacao — derivado por comparação de datas (Antecipação de Aula)', () => {
+  it('retorna null quando não há movimentação (reposicaoData ausente)', () => {
+    const r = buildRegistro({ alunoId: uid(), data: '2026-07-10' });
+    expect(tipoMovimentacao(r)).toBeNull();
+  });
+
+  it('reposicaoData posterior à data original => reposicao', () => {
+    const r = buildRegistro({
+      alunoId: uid(),
+      data: '2026-07-10',
+      reposicaoData: '2026-07-15',
+      reposicaoHorario: '07:00',
+    });
+    expect(tipoMovimentacao(r)).toBe('reposicao');
+  });
+
+  it('reposicaoData anterior à data original => antecipacao', () => {
+    const r = buildRegistro({
+      alunoId: uid(),
+      data: '2026-07-10',
+      reposicaoData: '2026-07-08',
+      reposicaoHorario: '07:00',
+    });
+    expect(tipoMovimentacao(r)).toBe('antecipacao');
+  });
+});
+
+describe('findHorarioConflict — conflito só entre movimentações avulsas, não contra a grade regular', () => {
+  it('detecta conflito quando OUTRO aluno já tem uma movimentação na mesma data+horário', () => {
+    const alunoA = uid();
+    const alunoB = uid();
+    const data = buildEmptyData({
+      registros: [
+        buildRegistro({
+          alunoId: alunoA,
+          data: '2026-07-10',
+          reposicaoData: '2026-08-06',
+          reposicaoHorario: '07:00',
+          reposicaoStatus: 'pendente',
+        }),
+      ],
+    });
+    const conflito = findHorarioConflict(data, '2026-08-06', '07:00', alunoB);
+    expect(conflito).toBeDefined();
+    expect(conflito?.alunoId).toBe(alunoA);
+  });
+
+  it('não considera conflito uma movimentação do MESMO aluno (reagendamento)', () => {
+    const alunoA = uid();
+    const data = buildEmptyData({
+      registros: [
+        buildRegistro({
+          alunoId: alunoA,
+          data: '2026-07-10',
+          reposicaoData: '2026-08-06',
+          reposicaoHorario: '07:00',
+          reposicaoStatus: 'pendente',
+        }),
+      ],
+    });
+    expect(findHorarioConflict(data, '2026-08-06', '07:00', alunoA)).toBeUndefined();
+  });
+
+  it('ignora movimentações canceladas', () => {
+    const alunoA = uid();
+    const alunoB = uid();
+    const data = buildEmptyData({
+      registros: [
+        buildRegistro({
+          alunoId: alunoA,
+          data: '2026-07-10',
+          reposicaoData: '2026-08-06',
+          reposicaoHorario: '07:00',
+          reposicaoStatus: 'cancelada',
+        }),
+      ],
+    });
+    expect(findHorarioConflict(data, '2026-08-06', '07:00', alunoB)).toBeUndefined();
+  });
+
+  it('não bloqueia horários diferentes no mesmo dia', () => {
+    const alunoA = uid();
+    const alunoB = uid();
+    const data = buildEmptyData({
+      registros: [
+        buildRegistro({
+          alunoId: alunoA,
+          data: '2026-07-10',
+          reposicaoData: '2026-08-06',
+          reposicaoHorario: '07:00',
+          reposicaoStatus: 'pendente',
+        }),
+      ],
+    });
+    expect(findHorarioConflict(data, '2026-08-06', '08:00', alunoB)).toBeUndefined();
+  });
 });

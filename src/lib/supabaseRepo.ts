@@ -76,6 +76,7 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       reposicaoStatus: r.reposicao_status ?? undefined,
       faltaObservacao: r.falta_observacao ?? undefined,
       reposicaoExcecao: r.reposicao_excecao ?? undefined,
+      dataOriginalAntecipacao: r.data_original_antecipacao ?? undefined,
     })),
     pagamentos: (pagamentosRes.data ?? []).map((p) => ({
       alunoId: p.aluno_id,

@@ -103,3 +103,88 @@ describe('statsDoAluno — cálculos financeiros', () => {
     expect(stats.reposicaoStats.canceladas).toBe(1);
   });
 });
+
+describe('Antecipação de Aula — reutiliza o campo de reposição, tipo derivado por data', () => {
+  it('antecipação concluída conta como 1 presença e 1 cobrança, nunca duas', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10', // aula original (futura)
+        status: 'presente',
+        reposicaoData: '2026-07-05', // antecipada para uma data anterior
+        reposicaoHorario: '07:00',
+        reposicaoStatus: 'concluida',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.presencas).toBe(1);
+    expect(stats.faturamento).toBe(100);
+    expect(stats.antecipacoes).toBe(1);
+    expect(stats.reposicoes).toBe(0);
+  });
+
+  it('reposições e antecipações são contabilizadas separadamente', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-05',
+        status: 'presente',
+        reposicaoData: '2026-07-15', // depois da original => reposição
+        reposicaoHorario: '07:00',
+        reposicaoStatus: 'concluida',
+      }),
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-20',
+        status: 'presente',
+        reposicaoData: '2026-07-12', // antes da original => antecipação
+        reposicaoHorario: '08:00',
+        reposicaoStatus: 'concluida',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.reposicoes).toBe(1);
+    expect(stats.antecipacoes).toBe(1);
+    expect(stats.presencas).toBe(2);
+    expect(stats.faturamento).toBe(200);
+  });
+
+  it('antecipação com falta (aluno não compareceu) conta como falta normal, sem dupla cobrança', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'falta',
+        reposicaoData: '2026-07-05',
+        reposicaoHorario: '07:00',
+        reposicaoStatus: 'nao_compareceu',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.faltas).toBe(1);
+    expect(stats.presencas).toBe(0);
+    expect(stats.faturamento).toBe(0);
+  });
+
+  it('antecipação remarcada após falta preserva dataOriginalAntecipacao sem afetar o faturamento', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-20',
+        status: 'presente',
+        reposicaoData: '2026-07-18', // segunda tentativa, concluída
+        reposicaoHorario: '07:00',
+        reposicaoStatus: 'concluida',
+        dataOriginalAntecipacao: '2026-07-12', // primeira tentativa, que falhou
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.presencas).toBe(1);
+    expect(stats.faturamento).toBe(100);
+    expect(stats.antecipacoes).toBe(1);
+  });
+});

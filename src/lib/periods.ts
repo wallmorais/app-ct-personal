@@ -1,4 +1,4 @@
-import type { AppData, ProfessorVacation, StudentEnrollment, StudentStatus } from '../types';
+import type { AppData, ProfessorVacation, Registro, StudentEnrollment, StudentStatus, TipoMovimentacao } from '../types';
 
 export function isProfessorOnVacation(data: AppData, date: string): boolean {
   if (!data.feriasProfessor) return false;
@@ -69,4 +69,35 @@ export function getEnrollmentsForStudent(data: AppData, alunoId: string): Studen
 export function getVacationsAll(data: AppData): ProfessorVacation[] {
   if (!data.feriasProfessor) return [];
   return [...data.feriasProfessor].sort((a, b) => b.dataInicio.localeCompare(a.dataInicio));
+}
+
+/**
+ * Deriva o tipo de movimentação comparando a data de destino com a data original.
+ * Nunca é persistido — sempre recalculado a partir de `data` e `reposicaoData`.
+ * Retorna null se o registro não tem movimentação (reposicaoData não definida).
+ */
+export function tipoMovimentacao(registro: Registro): TipoMovimentacao | null {
+  if (!registro.reposicaoData) return null;
+  return registro.reposicaoData < registro.data ? 'antecipacao' : 'reposicao';
+}
+
+/**
+ * Verifica se já existe, para OUTRO aluno, uma reposição/antecipação avulsa landing
+ * na mesma data+horário. Deliberadamente NÃO verifica a grade regular (StudentSchedule),
+ * pois o app suporta aulas em grupo (vários alunos no mesmo horário por design) — um
+ * conflito só faz sentido entre movimentações avulsas, não contra a grade recorrente.
+ */
+export function findHorarioConflict(
+  data: AppData,
+  novaData: string,
+  novoHorario: string,
+  excludeAlunoId: string,
+  excludeRegistroId?: string,
+): Registro | undefined {
+  return data.registros.find((r) => {
+    if (r.id === excludeRegistroId) return false;
+    if (r.alunoId === excludeAlunoId) return false;
+    if (r.reposicaoStatus === 'cancelada') return false;
+    return r.reposicaoData === novaData && r.reposicaoHorario === novoHorario;
+  });
 }

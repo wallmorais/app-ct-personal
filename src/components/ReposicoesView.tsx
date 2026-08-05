@@ -13,7 +13,7 @@ interface Props {
     data: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('../types').StatusReposicao },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
   ) => void;
 }

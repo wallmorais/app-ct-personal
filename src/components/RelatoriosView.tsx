@@ -189,7 +189,7 @@ function ConsolidadoTable({ lista }: { lista: AlunoStats[] }) {
           <th className="num">Plano Contratado</th>
           <th className="num">Realizadas</th>
           <th className="num">Faltas Just.</th>
-          <th className="num">Substituições</th>
+          <th className="num">Reposições</th>
           <th className="num">Taxa Presença</th>
           <th className="num">Valor/Aula</th>
           <th className="num">Total a Pagar</th>
@@ -310,6 +310,7 @@ export default function RelatoriosView({ data, profile }: Props) {
       presencas: statsFiltrados.reduce((acc, s) => acc + s.presencas, 0),
       faltas: statsFiltrados.reduce((acc, s) => acc + s.faltas, 0),
       reposicoes: statsFiltrados.reduce((acc, s) => acc + s.reposicoes, 0),
+      antecipacoes: statsFiltrados.reduce((acc, s) => acc + s.antecipacoes, 0),
       faturamento: statsFiltrados.reduce((acc, s) => acc + s.faturamento, 0),
     }),
     [statsFiltrados],
@@ -324,11 +325,13 @@ export default function RelatoriosView({ data, profile }: Props) {
     const plano = listaAtiva.reduce((acc, s) => acc + s.totalPlano, 0);
     const faturamento = listaAtiva.reduce((acc, s) => acc + s.faturamento, 0);
     const reposicoes = listaAtiva.reduce((acc, s) => acc + s.reposicoes, 0);
+    const antecipacoes = listaAtiva.reduce((acc, s) => acc + s.antecipacoes, 0);
     return {
       presencas,
       taxaMedia: plano > 0 ? (presencas / plano) * 100 : 0,
       faturamento,
       reposicoes,
+      antecipacoes,
     };
   }, [listaAtiva]);
 
@@ -538,7 +541,7 @@ export default function RelatoriosView({ data, profile }: Props) {
             Métricas consolidadas com base nos planos contratados e registros de chamadas diárias computadas no
             aplicativo.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
             <MacroCard value={String(macro.presencas)} label="Presenças Confirmadas" bg="#dcfce7" color="#16a34a" />
             <MacroCard
               value={`${macro.taxaMedia.toFixed(1)}%`}
@@ -552,7 +555,8 @@ export default function RelatoriosView({ data, profile }: Props) {
               bg="#f3e8ff"
               color="#9333ea"
             />
-            <MacroCard value={String(macro.reposicoes)} label="Substituições" bg="#fef3c7" color="#d97706" />
+            <MacroCard value={String(macro.reposicoes)} label="Reposições" bg="#fef3c7" color="#d97706" />
+            <MacroCard value={String(macro.antecipacoes)} label="Antecipações" bg="#e0f2fe" color="#0369a1" />
           </div>
         </div>
 
@@ -624,7 +628,7 @@ export default function RelatoriosView({ data, profile }: Props) {
             <p className="text-xs text-base-muted mt-1">Baseado nas aulas com presença confirmada</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
               <CheckCircle2 size={18} className="text-emerald mx-auto mb-1" />
               <p className="text-xl font-bold tabular-nums">{stats.totalPresencas}</p>
@@ -638,7 +642,12 @@ export default function RelatoriosView({ data, profile }: Props) {
             <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
               <RotateCw size={18} className="text-amber-600 dark:text-amber-400 mx-auto mb-1" />
               <p className="text-xl font-bold tabular-nums">{stats.totalReposicoes}</p>
-              <p className="text-[11px] text-base-muted">Substituições</p>
+              <p className="text-[11px] text-base-muted">Reposições</p>
+            </div>
+            <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
+              <RotateCw size={18} className="text-blue-600 dark:text-blue-400 mx-auto mb-1" />
+              <p className="text-xl font-bold tabular-nums">{stats.totalAntecipacoes}</p>
+              <p className="text-[11px] text-base-muted">Antecipações</p>
             </div>
           </div>
 
@@ -728,7 +737,8 @@ export default function RelatoriosView({ data, profile }: Props) {
               <div className="flex items-center gap-3 text-xs text-base-muted mt-2">
                 <span>{totalSelecionados.presencas} presenças</span>
                 <span className="text-red-600 dark:text-red-400">{totalSelecionados.faltas} faltas</span>
-                <span className="text-amber-600 dark:text-amber-400">{totalSelecionados.reposicoes} subst.</span>
+                <span className="text-amber-600 dark:text-amber-400">{totalSelecionados.reposicoes} repos.</span>
+                <span className="text-blue-600 dark:text-blue-400">{totalSelecionados.antecipacoes} antecip.</span>
               </div>
             </div>
           )}

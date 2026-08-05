@@ -13,7 +13,7 @@ import {
   shiftMonth,
   todayISO,
 } from '../lib/date';
-import { isProfessorOnVacation, isStudentActiveOnDate, isStudentOnVacation } from '../lib/periods';
+import { isProfessorOnVacation, isStudentActiveOnDate, isStudentOnVacation, tipoMovimentacao } from '../lib/periods';
 import ReposicaoModal from './ReposicaoModal';
 import FaltaModal from './FaltaModal';
 import MonthlyCalendar from './MonthlyCalendar';
@@ -26,7 +26,7 @@ interface Props {
     data: string,
     horario: string,
     status: StatusAula,
-    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno')[]; reposicaoStatus?: import('../types').StatusReposicao },
+    reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
   ) => void;
 }
@@ -403,6 +403,8 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
               if (item.kind === 'reposicao' && item.registro) {
                 const registro = item.registro;
                 const status = registro.status;
+                const tipo = tipoMovimentacao(registro);
+                const isAntecipacao = tipo === 'antecipacao';
 
                 return (
                   <div
@@ -418,9 +420,12 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-base">{aluno.nome}</p>
                           <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">
-                            Reposição
+                            {isAntecipacao ? 'Antecipação' : 'Reposição'}
                           </span>
                         </div>
+                        <p className="text-[11px] text-base-muted mt-0.5">
+                          Referente à aula de {formatDateLabel(registro.data)}
+                        </p>
                         <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${
                           registro.reposicaoStatus === 'concluida' ? 'text-emerald bg-emerald/10 border-emerald/40' :
                           registro.reposicaoStatus === 'nao_compareceu' ? 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30' :
@@ -434,6 +439,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                         {registro.reposicaoStatus === 'nao_compareceu' && registro.faltaObservacao && (
                           <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
                             Obs.: {registro.faltaObservacao}
+                          </p>
+                        )}
+                        {registro.dataOriginalAntecipacao && (
+                          <p className="text-[11px] text-base-muted mt-0.5">
+                            Antecipação anterior ({formatDateLabel(registro.dataOriginalAntecipacao)}) não compareceu.
                           </p>
                         )}
                       </div>
@@ -474,6 +484,10 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
               // Card de aula regular
               const status: StatusAula = item.registro?.status ?? 'pendente';
+              const origTipo = item.registro ? tipoMovimentacao(item.registro) : null;
+              // Antecipação: esta aula (futura) foi movida para uma data anterior — a
+              // aula original não recebe mais presença/falta, fica só informativa.
+              const isAntecipacaoOriginal = status === 'reposicao' && origTipo === 'antecipacao';
               return (
                 <div
                   key={`${item.slot.id}-${item.alunoId}`}
@@ -494,10 +508,17 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                           </span>
                         )}
                       </div>
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${STATUS_BADGE[status]}`}>
-                        {STATUS_LABEL[status]}
+                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${
+                        isAntecipacaoOriginal ? 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30' : STATUS_BADGE[status]
+                      }`}>
+                        {isAntecipacaoOriginal ? 'Aula Antecipada' : STATUS_LABEL[status]}
                       </span>
-                      {status === 'reposicao' && item.registro?.reposicaoData && (
+                      {isAntecipacaoOriginal && item.registro?.reposicaoData && (
+                        <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
+                          Realizada em {formatDateLabel(item.registro.reposicaoData)}
+                        </p>
+                      )}
+                      {!isAntecipacaoOriginal && status === 'reposicao' && item.registro?.reposicaoData && (
                         <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
                           Reposição: {formatDateLabel(item.registro.reposicaoData)} às {item.registro.reposicaoHorario}
                         </p>
@@ -511,7 +532,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                   </div>
 
                   {/* Botões de ação */}
-                  {item.emFerias ? (
+                  {isAntecipacaoOriginal ? (
+                    <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-medium text-blue-600/80 dark:text-blue-400/80">
+                      Aula realizada antecipadamente — sem ações pendentes.
+                    </div>
+                  ) : item.emFerias ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs font-medium text-blue-600/80 dark:text-blue-400/80">
                         <Palmtree size={13} />

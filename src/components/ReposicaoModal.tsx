@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { X, RotateCw, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { todayISO } from '../lib/date';
-import { isProfessorOnVacation, isStudentOnVacation } from '../lib/periods';
+import { isProfessorOnVacation, isStudentOnVacation, findHorarioConflict } from '../lib/periods';
 import type { AppData, Aluno } from '../types';
 
-type Excecao = 'ferias_professor' | 'ferias_aluno';
+type Excecao = 'ferias_professor' | 'ferias_aluno' | 'conflito_horario';
 
 interface Props {
   alunoNome: string;
@@ -27,6 +27,7 @@ interface ValidationResult {
 
 function validate(
   reposicaoDate: string,
+  reposicaoHorario: string,
   origData: string,
   aluno: Aluno,
   appData: AppData,
@@ -35,16 +36,12 @@ function validate(
   const blocking: string[] = [];
   const warnings: { key: Excecao; message: string }[] = [];
 
-  if (reposicaoDate < origData) {
-    blocking.push('A data da reposição não pode ser anterior à data da falta.');
-  }
-
   if (aluno.dataAdesao && reposicaoDate < aluno.dataAdesao) {
-    blocking.push('Não é possível agendar uma reposição antes da data de adesão do aluno.');
+    blocking.push('Não é possível agendar uma movimentação antes da data de adesão do aluno.');
   }
 
   if (aluno.dataEncerramento && reposicaoDate > aluno.dataEncerramento) {
-    blocking.push('Não é possível agendar uma reposição após o encerramento do contrato do aluno.');
+    blocking.push('Não é possível agendar uma movimentação após o encerramento do contrato do aluno.');
   }
 
   if (isProfessorOnVacation(appData, reposicaoDate)) {
@@ -58,6 +55,13 @@ function validate(
     warnings.push({
       key: 'ferias_aluno',
       message: 'O aluno está em período de férias nesta data.',
+    });
+  }
+
+  if (findHorarioConflict(appData, reposicaoDate, reposicaoHorario, alunoId)) {
+    warnings.push({
+      key: 'conflito_horario',
+      message: 'Já existe uma aula agendada para outro aluno neste horário.',
     });
   }
 
@@ -84,8 +88,8 @@ export default function ReposicaoModal({
   const mesmaDataHorarioOrigem = data === origData && horario === origHorario;
 
   const validation = useMemo(
-    () => validate(data, origData, aluno, appData, alunoId),
-    [data, origData, aluno, appData, alunoId],
+    () => validate(data, horario, origData, aluno, appData, alunoId),
+    [data, horario, origData, aluno, appData, alunoId],
   );
 
   const hasBlocking = validation.blocking.length > 0;
@@ -95,6 +99,11 @@ export default function ReposicaoModal({
 
   function handleDateChange(newDate: string) {
     setData(newDate);
+    setConfirmedExceptions(new Set());
+  }
+
+  function handleHorarioChange(newHorario: string) {
+    setHorario(newHorario);
     setConfirmedExceptions(new Set());
   }
 
@@ -117,7 +126,7 @@ export default function ReposicaoModal({
             </div>
             <div>
               <h2 className="text-base font-semibold">
-                {initialData ? 'Reagendar reposição' : 'Agendar reposição'}
+                {initialData ? 'Reagendar aula' : 'Mover aula'}
               </h2>
               <p className="text-xs text-base-muted">{alunoNome}</p>
             </div>
@@ -129,27 +138,32 @@ export default function ReposicaoModal({
 
         <div className="space-y-3">
           <div>
-            <label htmlFor="reposicao-data">Data da reposição</label>
+            <label htmlFor="reposicao-data">Nova data</label>
             <input
               id="reposicao-data"
               type="date"
               value={data}
               onChange={(e) => handleDateChange(e.target.value)}
             />
+            <p className="text-[11px] text-base-muted mt-1">
+              {data && data < origData
+                ? 'Data anterior à aula original — será registrada como antecipação.'
+                : 'Data posterior à aula original — será registrada como reposição.'}
+            </p>
           </div>
           <div>
-            <label htmlFor="reposicao-horario">Horário</label>
+            <label htmlFor="reposicao-horario">Novo horário</label>
             <input
               id="reposicao-horario"
               type="time"
               value={horario}
-              onChange={(e) => setHorario(e.target.value)}
+              onChange={(e) => handleHorarioChange(e.target.value)}
             />
           </div>
 
           {mesmaDataHorarioOrigem && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              A reposição precisa ser em uma data ou horário diferente da aula original.
+              A nova data/horário precisa ser diferente da aula original.
             </p>
           )}
 
@@ -199,6 +213,9 @@ export default function ReposicaoModal({
               )}
               {confirmedExceptions.has('ferias_aluno') && (
                 <p className="text-xs text-amber-700 dark:text-amber-300">✓ Aluno em férias</p>
+              )}
+              {confirmedExceptions.has('conflito_horario') && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">✓ Conflito de horário mantido</p>
               )}
             </div>
           )}
