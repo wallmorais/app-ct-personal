@@ -22,11 +22,12 @@ interface Props {
 }
 
 
-type Situacao = 'Presença' | 'Falta' | 'Substituição' | 'Pendente';
+type Situacao = 'Presença' | 'Falta' | 'Falta não avisada' | 'Substituição' | 'Pendente';
 
 const SITUACAO_COLOR: Record<Situacao, string> = {
   Presença: 'text-emerald',
   Falta: 'text-red-600 dark:text-red-400',
+  'Falta não avisada': 'text-red-600 dark:text-red-400',
   Substituição: 'text-amber-600 dark:text-amber-400',
   Pendente: 'text-base-muted',
 };
@@ -34,17 +35,19 @@ const SITUACAO_COLOR: Record<Situacao, string> = {
 const SITUACAO_BADGE: Record<Situacao, { bg: string; color: string }> = {
   Presença: { bg: '#dcfce7', color: '#16a34a' },
   Falta: { bg: '#fee2e2', color: '#dc2626' },
+  'Falta não avisada': { bg: '#fee2e2', color: '#b91c1c' },
   Substituição: { bg: '#fef3c7', color: '#d97706' },
   Pendente: { bg: '#f1f5f9', color: '#64748b' },
 };
 
-/** Classifica cada lançamento do histórico em Presença, Falta ou Substituição. */
+/** Classifica cada lançamento do histórico em Presença, Falta, Falta não avisada ou Substituição. */
 function situacaoDe(entry: HistoricoEntry): Situacao {
   if (entry.tipo === 'reagendamento') {
     if (entry.status === 'presente') return 'Presença';
     if (entry.status === 'falta') return 'Falta';
     return 'Substituição';
   }
+  if (entry.faltaTipo === 'nao_avisada') return 'Falta não avisada';
   if (entry.reagendadoPara) return 'Substituição';
   if (entry.status === 'presente') return 'Presença';
   if (entry.status === 'falta') return 'Falta';
@@ -57,6 +60,9 @@ function observacaoDe(entry: HistoricoEntry): string {
     return entry.status === 'falta' && entry.faltaObservacao
       ? `${origem} — ${entry.faltaObservacao}`
       : origem;
+  }
+  if (entry.faltaTipo === 'nao_avisada') {
+    return 'Cobrada • Sem reposição';
   }
   if (entry.reagendadoPara) {
     return `Substituição em ${formatDateLabel(entry.reagendadoPara.data)} às ${entry.reagendadoPara.horario}`;
@@ -121,6 +127,9 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
         )}
         {entry.status === 'falta' && entry.faltaObservacao && (
           <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Obs.: {entry.faltaObservacao}</p>
+        )}
+        {entry.faltaTipo === 'nao_avisada' && (
+          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Cobrada • Sem reposição</p>
         )}
       </div>
     </div>
@@ -230,8 +239,8 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
     <div className="avoid-break" style={{ marginTop: 20 }}>
       <h3 style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>Histórico Detalhado de Agendamentos</h3>
       <p style={{ fontSize: 10, color: '#64748b', marginBottom: 8, maxWidth: 560 }}>
-        Listagem completa das aulas no período, com identificação de Presença, Falta ou Substituição, servindo como
-        auditoria física.
+        Listagem completa das aulas no período, com identificação de Presença, Falta, Falta Não Avisada ou
+        Substituição, servindo como auditoria física.
       </p>
 
       {entries.length === 0 ? (
@@ -638,6 +647,11 @@ export default function RelatoriosView({ data, profile }: Props) {
               <XCircle size={18} className="text-red-600 dark:text-red-400 mx-auto mb-1" />
               <p className="text-xl font-bold tabular-nums">{stats.totalFaltas}</p>
               <p className="text-[11px] text-base-muted">Faltas</p>
+              {stats.totalFaltasNaoAvisadas > 0 && (
+                <p className="text-[10px] text-red-600/70 dark:text-red-400/70 mt-0.5">
+                  {stats.totalFaltasNaoAvisadas} não avisada{stats.totalFaltasNaoAvisadas > 1 ? 's' : ''} (cobrada{stats.totalFaltasNaoAvisadas > 1 ? 's' : ''})
+                </p>
+              )}
             </div>
             <div className="bg-base-card border border-base-border rounded-2xl p-3 text-center">
               <RotateCw size={18} className="text-amber-600 dark:text-amber-400 mx-auto mb-1" />

@@ -241,6 +241,7 @@ export default function App() {
     status: StatusAula,
     reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('./types').StatusReposicao },
     faltaObservacao?: string,
+    faltaTipo?: import('./types').TipoFalta,
   ) {
     setData((prev) => {
       const existing = prev.registros.find(
@@ -278,6 +279,7 @@ export default function App() {
                   reposicaoStatus,
                   reposicaoExcecao: excecao,
                   faltaObservacao: observacao,
+                  faltaTipo,
                   dataOriginalAntecipacao,
                 }
               : r,
@@ -301,6 +303,7 @@ export default function App() {
             reposicaoStatus,
             reposicaoExcecao: excecao,
             faltaObservacao: observacao,
+            faltaTipo,
             dataOriginalAntecipacao,
           },
         ],

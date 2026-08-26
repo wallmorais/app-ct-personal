@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overviewStats, statsDoAluno } from './billing';
+import { historicoDoAluno, overviewStats, statsDoAluno } from './billing';
 import { buildAluno, buildEmptyData, uid } from './testFixtures';
 import type { Registro } from '../types';
 
@@ -186,5 +186,96 @@ describe('Antecipação de Aula — reutiliza o campo de reposição, tipo deriv
     expect(stats.presencas).toBe(1);
     expect(stats.faturamento).toBe(100);
     expect(stats.antecipacoes).toBe(1);
+  });
+});
+
+describe('Falta Avisada vs Não Avisada', () => {
+  it('falta avisada: não cobra, conta como falta, não como presença', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'falta',
+        faltaTipo: 'avisada',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.faltas).toBe(1);
+    expect(stats.presencas).toBe(0);
+    expect(stats.faturamento).toBe(0);
+    expect(stats.faltasNaoAvisadas).toBe(0);
+  });
+
+  it('falta não avisada: cobra, conta como presença, NÃO como falta', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'presente',
+        faltaTipo: 'nao_avisada',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.presencas).toBe(1);
+    expect(stats.faturamento).toBe(100);
+    expect(stats.faltas).toBe(0);
+    expect(stats.faltasNaoAvisadas).toBe(1);
+  });
+
+  it('falta não avisada não gera reposição (sem reposicaoData, sem contagem em reposicoes/antecipacoes)', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'presente',
+        faltaTipo: 'nao_avisada',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.reposicoes).toBe(0);
+    expect(stats.antecipacoes).toBe(0);
+    expect(stats.reposicaoStats.total).toBe(0);
+  });
+
+  it('faltasNaoAvisadas é agregado corretamente em overviewStats', () => {
+    const alunoA = buildAluno({ nome: 'A', valorAula: 100 });
+    const alunoB = buildAluno({ nome: 'B', valorAula: 100 });
+    const registros = [
+      buildRegistro({ alunoId: alunoA.id, data: '2026-07-10', status: 'presente', faltaTipo: 'nao_avisada' }),
+      buildRegistro({ alunoId: alunoB.id, data: '2026-07-12', status: 'presente', faltaTipo: 'nao_avisada' }),
+      buildRegistro({ alunoId: alunoB.id, data: '2026-07-15', status: 'falta', faltaTipo: 'avisada' }),
+    ];
+    const overview = overviewStats(buildEmptyData({ alunos: [alunoA, alunoB], registros }), range);
+    expect(overview.totalFaltasNaoAvisadas).toBe(2);
+    expect(overview.totalFaltas).toBe(1);
+    expect(overview.totalPresencas).toBe(2);
+  });
+
+  it('historicoDoAluno propaga faltaTipo para a entrada normal, sem alterar status', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'presente',
+        faltaTipo: 'nao_avisada',
+      }),
+    ];
+    const [entry] = historicoDoAluno(aluno, registros, range);
+    expect(entry.status).toBe('presente');
+    expect(entry.faltaTipo).toBe('nao_avisada');
+  });
+
+  it('historicoDoAluno mantém faltaTipo undefined para registros antigos (sem regressão)', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({ alunoId: aluno.id, data: '2026-07-10', status: 'presente' }),
+      buildRegistro({ alunoId: aluno.id, data: '2026-07-12', status: 'falta' }),
+    ];
+    const entries = historicoDoAluno(aluno, registros, range);
+    expect(entries.every((e) => e.faltaTipo === undefined)).toBe(true);
   });
 });

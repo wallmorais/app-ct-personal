@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, X, RotateCw, ChevronLeft, ChevronRight, CalendarRange, AlertTriangle, CheckCheck, Palmtree } from 'lucide-react';
-import type { AppData, AulaSlot, Registro, StatusAula } from '../types';
+import type { AppData, AulaSlot, Registro, StatusAula, TipoFalta } from '../types';
 import {
   ORDEM_SEMANA,
   DIA_LABELS,
@@ -16,6 +16,7 @@ import {
 import { isProfessorOnVacation, isStudentActiveOnDate, isStudentOnVacation, tipoMovimentacao } from '../lib/periods';
 import ReposicaoModal from './ReposicaoModal';
 import FaltaModal from './FaltaModal';
+import FaltaTipoModal from './FaltaTipoModal';
 import MonthlyCalendar from './MonthlyCalendar';
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
     status: StatusAula,
     reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
+    faltaTipo?: TipoFalta,
   ) => void;
 }
 
@@ -112,6 +114,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
   const [monthCursor, setMonthCursor] = useState(startOfMonth(todayISO()));
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [faltaModalState, setFaltaModalState] = useState<FaltaModalState | null>(null);
+  const [faltaTipoState, setFaltaTipoState] = useState<FaltaModalState | null>(null);
 
   const isFerias = useMemo(() => isProfessorOnVacation(data, selectedDate), [data, selectedDate]);
 
@@ -191,7 +194,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
     if (status === 'falta' && current?.status !== 'falta') {
       const aluno = data.alunos.find((a) => a.id === alunoId);
-      setFaltaModalState({
+      setFaltaTipoState({
         alunoId,
         alunoNome: aluno?.nome ?? '',
         slotId: slot.id,
@@ -203,6 +206,29 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
 
     const next = current?.status === status ? 'pendente' : status;
     onUpdateRegistro(alunoId, slot.id, selectedDate, slot.horario, next);
+  }
+
+  function handleEscolhaFaltaTipo(tipo: import('../types').TipoFalta) {
+    if (!faltaTipoState) return;
+    if (tipo === 'avisada') {
+      // Segue o fluxo normal de falta (pede observação opcional).
+      setFaltaModalState(faltaTipoState);
+      setFaltaTipoState(null);
+      return;
+    }
+    // Não avisada: aula é tratada como realizada (cobra, sem reposição), mas o
+    // histórico da ausência sem aviso fica registrado em faltaTipo.
+    onUpdateRegistro(
+      faltaTipoState.alunoId,
+      faltaTipoState.slotId,
+      faltaTipoState.data,
+      faltaTipoState.horario,
+      'presente',
+      undefined,
+      undefined,
+      'nao_avisada',
+    );
+    setFaltaTipoState(null);
   }
 
   function handleReposicaoStatus(registro: Registro, action: 'concluida' | 'nao_compareceu') {
@@ -528,6 +554,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                           Obs.: {item.registro.faltaObservacao}
                         </p>
                       )}
+                      {status === 'presente' && item.registro?.faltaTipo === 'nao_avisada' && (
+                        <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                          Falta não avisada — cobrada, sem reposição
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -645,7 +676,16 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
         ) : null;
       })()}
 
-      {/* Modal de falta */}
+      {/* Escolha Avisada/Não avisada — só para falta na aula regular (não na reposição) */}
+      {faltaTipoState && (
+        <FaltaTipoModal
+          alunoNome={faltaTipoState.alunoNome}
+          onClose={() => setFaltaTipoState(null)}
+          onChoose={handleEscolhaFaltaTipo}
+        />
+      )}
+
+      {/* Modal de falta (observação opcional) */}
       {faltaModalState && (
         <FaltaModal
           alunoNome={faltaModalState.alunoNome}
@@ -662,6 +702,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
               'falta',
               reposicao,
               observacao,
+              faltaModalState.reposicao ? undefined : 'avisada',
             );
             setFaltaModalState(null);
           }}

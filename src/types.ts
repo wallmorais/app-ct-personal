@@ -46,6 +46,14 @@ export type StatusAula = 'pendente' | 'presente' | 'falta' | 'reposicao';
 
 export type StatusReposicao = 'pendente' | 'concluida' | 'cancelada' | 'nao_compareceu';
 
+/**
+ * Distingue, dentro de uma falta, se o aluno avisou com antecedência ou não.
+ * 'avisada' segue o fluxo normal de falta (status='falta', não cobra, gera reposição).
+ * 'nao_avisada' é tratada como aula realizada (status='presente', cobra, sem reposição),
+ * mas preserva o registro de que houve ausência, para histórico e relatórios.
+ */
+export type TipoFalta = 'avisada' | 'nao_avisada';
+
 export interface Registro {
   id: string;
   alunoId: string;
@@ -58,6 +66,12 @@ export interface Registro {
   reposicaoStatus?: StatusReposicao;
   /** Observação opcional registrada ao marcar falta (ex.: motivo, aviso prévio). */
   faltaObservacao?: string;
+  /**
+   * Preenchido apenas quando o professor registra uma falta. 'nao_avisada' faz o
+   * status ficar 'presente' (aula cobrada, sem reposição), mas mantém aqui o
+   * histórico de que o aluno não compareceu sem avisar.
+   */
+  faltaTipo?: TipoFalta;
   /** Exceções confirmadas pelo professor ao agendar reposição (férias ou conflito de horário). */
   reposicaoExcecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[];
   /**

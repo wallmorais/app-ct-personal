@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RotateCw, Check, X, Clock, CalendarDays, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { AppData, Registro, StatusAula } from '../types';
+import type { AppData, Registro, StatusAula, TipoFalta } from '../types';
 import { formatDateLabel, todayISO, startOfMonth, shiftMonth, addDays, monthLabel } from '../lib/date';
 import ReposicaoModal from './ReposicaoModal';
 import FaltaModal from './FaltaModal';
@@ -15,6 +15,7 @@ interface Props {
     status: StatusAula,
     reposicao?: { data: string; horario: string; excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[]; reposicaoStatus?: import('../types').StatusReposicao },
     faltaObservacao?: string,
+    faltaTipo?: TipoFalta,
   ) => void;
 }
 

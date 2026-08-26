@@ -1,4 +1,4 @@
-import type { AppData, Aluno, Registro, StatusAula } from '../types';
+import type { AppData, Aluno, Registro, StatusAula, TipoFalta } from '../types';
 import { addDays, shiftMonth, startOfMonth, todayISO } from './date';
 import { tipoMovimentacao } from './periods';
 
@@ -34,6 +34,8 @@ export interface AlunoStats {
   reposicoes: number;
   /** Movimentações para uma data anterior à original (aula trazida para frente). */
   antecipacoes: number;
+  /** Faltas sem aviso prévio — contabilizadas como presença/cobrança, mas registradas aqui para histórico. */
+  faltasNaoAvisadas: number;
   reposicaoStats: ReposicaoStats;
   totalPlano: number;
   taxaPresenca: number; // 0-100
@@ -45,6 +47,7 @@ export interface OverviewStats {
   totalFaltas: number;
   totalReposicoes: number;
   totalAntecipacoes: number;
+  totalFaltasNaoAvisadas: number;
   faturamentoTotal: number;
   porAluno: AlunoStats[];
 }
@@ -76,6 +79,8 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
       r.reposicaoData <= range.end,
   ).length;
   const faltas = faltasRegulares + faltasReposicao;
+
+  const faltasNaoAvisadas = doPeriodo.filter((r) => r.faltaTipo === 'nao_avisada').length;
 
   const movimentacoesNoPeriodo = doAluno.filter(
     (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
@@ -109,6 +114,7 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
     faltas,
     reposicoes,
     antecipacoes,
+    faltasNaoAvisadas,
     reposicaoStats,
     totalPlano: aluno.plano,
     taxaPresenca,
@@ -124,6 +130,7 @@ export function overviewStats(data: AppData, range: DateRange = currentMonthRang
     totalFaltas: porAluno.reduce((acc, s) => acc + s.faltas, 0),
     totalReposicoes: porAluno.reduce((acc, s) => acc + s.reposicoes, 0),
     totalAntecipacoes: porAluno.reduce((acc, s) => acc + s.antecipacoes, 0),
+    totalFaltasNaoAvisadas: porAluno.reduce((acc, s) => acc + s.faltasNaoAvisadas, 0),
     faturamentoTotal: porAluno.reduce((acc, s) => acc + s.faturamento, 0),
     porAluno,
   };
@@ -142,6 +149,8 @@ export interface HistoricoEntry {
   reagendadoPara?: { data: string; horario: string };
   /** Observação opcional registrada ao marcar falta. */
   faltaObservacao?: string;
+  /** Distingue falta avisada de não avisada, para apresentação em relatórios. */
+  faltaTipo?: TipoFalta;
 }
 
 export function historicoDoAluno(
@@ -166,6 +175,7 @@ export function historicoDoAluno(
             ? { data: r.reposicaoData, horario: r.reposicaoHorario }
             : undefined,
         faltaObservacao: r.faltaObservacao,
+        faltaTipo: r.faltaTipo,
       });
     }
 
