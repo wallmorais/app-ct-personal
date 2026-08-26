@@ -78,6 +78,7 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
   const [restricoes, setRestricoes] = useState(aluno?.restricoes ?? '');
   const [dataAdesao, setDataAdesao] = useState(aluno?.dataAdesao ?? '');
   const [dataEncerramento, setDataEncerramento] = useState(aluno?.dataEncerramento ?? '');
+  const [diaCobranca, setDiaCobranca] = useState<string>(aluno?.diaCobranca ? String(aluno.diaCobranca) : '');
   const [vacations, setVacations] = useState<StudentVacation[]>(studentVacations);
   const [newVacInicio, setNewVacInicio] = useState('');
   const [newVacFim, setNewVacFim] = useState('');
@@ -154,6 +155,7 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
         restricoes: restricoes.trim() || undefined,
         dataAdesao: dataAdesao || undefined,
         dataEncerramento: dataEncerramento || undefined,
+        diaCobranca: diaCobranca ? Number(diaCobranca) : undefined,
       },
       agendaSelecionada,
       vacationsFinal,
@@ -295,6 +297,26 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
             <p className="text-[11px] text-base-muted mt-1">
               O aluno aparece na agenda somente entre estas datas.
             </p>
+            <div className="mt-3">
+              <label htmlFor="aluno-dia-cobranca">Dia de cobrança</label>
+              <div className="flex items-center gap-2">
+                <select
+                  id="aluno-dia-cobranca"
+                  value={diaCobranca}
+                  onChange={(e) => setDiaCobranca(e.target.value)}
+                  className="w-20"
+                >
+                  <option value="">—</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-base-muted">de cada mês</span>
+              </div>
+              <p className="text-[11px] text-base-muted mt-1">
+                Dia do mês em que ocorre a cobrança recorrente.
+              </p>
+            </div>
           </div>
 
           {/* ── Férias do aluno ── */}

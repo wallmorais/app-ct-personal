@@ -10,6 +10,8 @@ export interface Aluno {
   restricoes?: string; // restrições médicas
   dataAdesao?: string; // YYYY-MM-DD — aluno só aparece na agenda a partir desta data
   dataEncerramento?: string; // YYYY-MM-DD — aluno não aparece na agenda após esta data
+  /** Dia do mês (1–31) em que ocorre a cobrança recorrente. Regra financeira, não determina vigência nem agenda. */
+  diaCobranca?: number;
 }
 
 export type StatusPagamento = 'pendente' | 'pago' | 'atrasado';

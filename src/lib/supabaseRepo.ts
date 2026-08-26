@@ -52,6 +52,7 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       restricoes: a.restricoes ?? undefined,
       dataAdesao: a.data_adesao ?? undefined,
       dataEncerramento: a.data_encerramento ?? undefined,
+      diaCobranca: a.dia_cobranca ?? undefined,
     })),
     slots: (slotsRes.data ?? []).map((s) => ({
       id: s.id,
