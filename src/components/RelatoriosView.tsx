@@ -67,7 +67,7 @@ function observacaoDe(entry: HistoricoEntry): string {
   if (entry.faltaProfessor) {
     return entry.reagendadoPara
       ? `Sem cobrança • Reposição em ${formatDateLabel(entry.reagendadoPara.data)} às ${entry.reagendadoPara.horario}`
-      : 'Sem cobrança • Reposição necessária';
+      : 'Sem cobrança';
   }
   if (entry.faltaTipo === 'nao_avisada') {
     return 'Cobrada • Sem reposição';
@@ -140,7 +140,7 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
           <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Cobrada • Sem reposição</p>
         )}
         {entry.faltaProfessor && (
-          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Sem cobrança • Reposição necessária</p>
+          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Sem cobrança</p>
         )}
       </div>
     </div>

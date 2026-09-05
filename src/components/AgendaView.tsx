@@ -555,7 +555,7 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                       )}
                       {item.registro?.faltaProfessor && !item.registro?.reposicaoData && (
                         <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
-                          Sem cobrança • Reposição necessária
+                          Sem cobrança
                         </p>
                       )}
                       {status === 'falta' && !item.registro?.faltaProfessor && item.registro?.faltaObservacao && (

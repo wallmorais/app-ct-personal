@@ -71,7 +71,10 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
   const [nome, setNome] = useState(aluno?.nome ?? '');
   const [telefone, setTelefone] = useState(aluno?.telefone ?? '');
   const [plano, setPlano] = useState(aluno?.plano ?? 8);
-  const [valorAula, setValorAula] = useState(aluno?.valorAula ?? 100);
+  // String durante a digitação (não number): um input controlado por número
+  // reformata o valor a cada tecla e apaga o separador decimal antes do
+  // usuário terminar de digitar os centavos (ex.: "100." vira 100 → "100").
+  const [valorAula, setValorAula] = useState(String(aluno?.valorAula ?? 100));
   const [observacoes, setObservacoes] = useState(aluno?.observacoes ?? '');
   const [aniversario, setAniversario] = useState(aluno?.aniversario ?? '');
   const [objetivo, setObjetivo] = useState(aluno?.objetivo ?? '');
@@ -148,7 +151,7 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
         nome: nome.trim(),
         telefone: telefone.trim(),
         plano: Number(plano) || 0,
-        valorAula: Number(valorAula) || 0,
+        valorAula: Number(valorAula.replace(',', '.')) || 0,
         observacoes: observacoes.trim(),
         aniversario: aniversario || undefined,
         objetivo: objetivo.trim() || undefined,
@@ -219,11 +222,15 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
               <label htmlFor="aluno-valor">Valor/aula (R$)</label>
               <input
                 id="aluno-valor"
-                type="number"
-                min={0}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={valorAula}
-                onChange={(e) => setValorAula(Number(e.target.value))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  // aceita dígitos e um único separador decimal (vírgula ou ponto)
+                  if (/^\d*[.,]?\d*$/.test(raw)) setValorAula(raw);
+                }}
+                placeholder="100,00"
               />
             </div>
           </div>
