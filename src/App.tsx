@@ -266,6 +266,14 @@ export default function App() {
         dataOriginalAntecipacao = existing.reposicaoData;
       }
 
+      // faltaProfessor é preservado por padrão (ex.: ao agendar/atualizar uma
+      // reposição da mesma aula) — só é limpo quando o professor explicitamente
+      // marca presença ou reclassifica a falta como do aluno (faltaTipo definido).
+      // Isso mantém a ligação ausência↔registro detectável sem precisar de um
+      // vínculo explícito (ver previewAbsenceCancel em lib/periods.ts).
+      const faltaProfessor =
+        status === 'presente' || faltaTipo !== undefined ? undefined : existing?.faltaProfessor;
+
       if (existing) {
         return {
           ...prev,
@@ -281,6 +289,7 @@ export default function App() {
                   faltaObservacao: observacao,
                   faltaTipo,
                   dataOriginalAntecipacao,
+                  faltaProfessor,
                 }
               : r,
           ),

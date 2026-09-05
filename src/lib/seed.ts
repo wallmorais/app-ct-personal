@@ -41,6 +41,7 @@ export function buildSeedData(): AppData {
     pagamentos: [],
     feriasProfessor: [],
     matriculas: [],
+    ausenciasProfessor: [],
     config: {
       notificationTime: '21:00',
       nomeProfissional: 'Professor(a) Demo',

@@ -537,7 +537,11 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 ${
                         isAntecipacaoOriginal ? 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30' : STATUS_BADGE[status]
                       }`}>
-                        {isAntecipacaoOriginal ? 'Aula Antecipada' : STATUS_LABEL[status]}
+                        {isAntecipacaoOriginal
+                          ? 'Aula Antecipada'
+                          : item.registro?.faltaProfessor
+                            ? 'Falta do Professor'
+                            : STATUS_LABEL[status]}
                       </span>
                       {isAntecipacaoOriginal && item.registro?.reposicaoData && (
                         <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
@@ -549,7 +553,12 @@ export default function AgendaView({ data, onUpdateRegistro }: Props) {
                           Reposição: {formatDateLabel(item.registro.reposicaoData)} às {item.registro.reposicaoHorario}
                         </p>
                       )}
-                      {status === 'falta' && item.registro?.faltaObservacao && (
+                      {item.registro?.faltaProfessor && !item.registro?.reposicaoData && (
+                        <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                          Sem cobrança • Reposição necessária
+                        </p>
+                      )}
+                      {status === 'falta' && !item.registro?.faltaProfessor && item.registro?.faltaObservacao && (
                         <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
                           Obs.: {item.registro.faltaObservacao}
                         </p>

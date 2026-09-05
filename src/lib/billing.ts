@@ -36,6 +36,8 @@ export interface AlunoStats {
   antecipacoes: number;
   /** Faltas sem aviso prévio — contabilizadas como presença/cobrança, mas registradas aqui para histórico. */
   faltasNaoAvisadas: number;
+  /** Aulas não realizadas por ausência do professor — não é falta do aluno, não cobra, não conta em `faltas`. */
+  faltasProfessor: number;
   reposicaoStats: ReposicaoStats;
   totalPlano: number;
   taxaPresenca: number; // 0-100
@@ -48,6 +50,7 @@ export interface OverviewStats {
   totalReposicoes: number;
   totalAntecipacoes: number;
   totalFaltasNaoAvisadas: number;
+  totalFaltasProfessor: number;
   faturamentoTotal: number;
   porAluno: AlunoStats[];
 }
@@ -70,7 +73,9 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
   ).length;
   const presencas = presencasRegulares + presencasReposicao;
 
-  const faltasRegulares = doPeriodo.filter((r) => r.status === 'falta' && !r.reposicaoData).length;
+  const faltasRegulares = doPeriodo.filter(
+    (r) => r.status === 'falta' && !r.reposicaoData && !r.faltaProfessor,
+  ).length;
   const faltasReposicao = doAluno.filter(
     (r) =>
       r.reposicaoStatus === 'nao_compareceu' &&
@@ -81,6 +86,9 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
   const faltas = faltasRegulares + faltasReposicao;
 
   const faltasNaoAvisadas = doPeriodo.filter((r) => r.faltaTipo === 'nao_avisada').length;
+
+  // Falta do professor não é falta do aluno: excluída de `faltas`, contada à parte.
+  const faltasProfessor = doPeriodo.filter((r) => r.faltaProfessor).length;
 
   const movimentacoesNoPeriodo = doAluno.filter(
     (r) => !!r.reposicaoData && r.reposicaoData >= range.start && r.reposicaoData <= range.end,
@@ -115,6 +123,7 @@ export function statsDoAluno(aluno: Aluno, registros: Registro[], range: DateRan
     reposicoes,
     antecipacoes,
     faltasNaoAvisadas,
+    faltasProfessor,
     reposicaoStats,
     totalPlano: aluno.plano,
     taxaPresenca,
@@ -131,6 +140,7 @@ export function overviewStats(data: AppData, range: DateRange = currentMonthRang
     totalReposicoes: porAluno.reduce((acc, s) => acc + s.reposicoes, 0),
     totalAntecipacoes: porAluno.reduce((acc, s) => acc + s.antecipacoes, 0),
     totalFaltasNaoAvisadas: porAluno.reduce((acc, s) => acc + s.faltasNaoAvisadas, 0),
+    totalFaltasProfessor: porAluno.reduce((acc, s) => acc + s.faltasProfessor, 0),
     faturamentoTotal: porAluno.reduce((acc, s) => acc + s.faturamento, 0),
     porAluno,
   };
@@ -151,6 +161,8 @@ export interface HistoricoEntry {
   faltaObservacao?: string;
   /** Distingue falta avisada de não avisada, para apresentação em relatórios. */
   faltaTipo?: TipoFalta;
+  /** Aula não realizada por ausência do professor (não é falta do aluno). */
+  faltaProfessor?: boolean;
 }
 
 export function historicoDoAluno(
@@ -176,6 +188,7 @@ export function historicoDoAluno(
             : undefined,
         faltaObservacao: r.faltaObservacao,
         faltaTipo: r.faltaTipo,
+        faltaProfessor: r.faltaProfessor,
       });
     }
 

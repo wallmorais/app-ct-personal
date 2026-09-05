@@ -4,7 +4,7 @@ import { buildSeedData } from './seed';
 
 /** Retorna null se o Supabase estiver vazio para este usuário (primeiro acesso). */
 export async function fetchAppData(userId: string): Promise<AppData | null> {
-  const [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, configRes] =
+  const [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, ausenciasRes, configRes] =
     await Promise.all([
       supabase.from('alunos').select('*').eq('user_id', userId),
       supabase.from('aula_slots').select('*').eq('user_id', userId),
@@ -13,10 +13,11 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       supabase.from('pagamentos').select('*').eq('user_id', userId),
       supabase.from('ferias_professor').select('*').eq('user_id', userId),
       supabase.from('matriculas').select('*').eq('user_id', userId),
+      supabase.from('ausencias_professor').select('*').eq('user_id', userId),
       supabase.from('config').select('*').eq('user_id', userId).maybeSingle(),
     ]);
 
-  for (const res of [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, configRes]) {
+  for (const res of [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, ausenciasRes, configRes]) {
     if (res.error) throw res.error;
   }
 
@@ -79,6 +80,7 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       reposicaoExcecao: r.reposicao_excecao ?? undefined,
       dataOriginalAntecipacao: r.data_original_antecipacao ?? undefined,
       faltaTipo: r.falta_tipo ?? undefined,
+      faltaProfessor: r.falta_professor ?? undefined,
     })),
     pagamentos: (pagamentosRes.data ?? []).map((p) => ({
       alunoId: p.aluno_id,
@@ -102,6 +104,13 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       tipo: m.tipo,
       observacao: m.observacao ?? undefined,
       createdAt: m.created_at,
+    })),
+    ausenciasProfessor: (ausenciasRes.data ?? []).map((a) => ({
+      id: a.id,
+      data: a.data,
+      motivo: a.motivo,
+      observacao: a.observacao ?? undefined,
+      createdAt: a.created_at,
     })),
     config: {
       notificationTime: cfg?.notification_time ?? '21:00',

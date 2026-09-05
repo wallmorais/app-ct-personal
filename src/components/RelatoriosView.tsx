@@ -22,12 +22,13 @@ interface Props {
 }
 
 
-type Situacao = 'Presença' | 'Falta' | 'Falta não avisada' | 'Substituição' | 'Pendente';
+type Situacao = 'Presença' | 'Falta' | 'Falta não avisada' | 'Falta do Professor' | 'Substituição' | 'Pendente';
 
 const SITUACAO_COLOR: Record<Situacao, string> = {
   Presença: 'text-emerald',
   Falta: 'text-red-600 dark:text-red-400',
   'Falta não avisada': 'text-red-600 dark:text-red-400',
+  'Falta do Professor': 'text-red-600 dark:text-red-400',
   Substituição: 'text-amber-600 dark:text-amber-400',
   Pendente: 'text-base-muted',
 };
@@ -36,17 +37,19 @@ const SITUACAO_BADGE: Record<Situacao, { bg: string; color: string }> = {
   Presença: { bg: '#dcfce7', color: '#16a34a' },
   Falta: { bg: '#fee2e2', color: '#dc2626' },
   'Falta não avisada': { bg: '#fee2e2', color: '#b91c1c' },
+  'Falta do Professor': { bg: '#fecaca', color: '#991b1b' },
   Substituição: { bg: '#fef3c7', color: '#d97706' },
   Pendente: { bg: '#f1f5f9', color: '#64748b' },
 };
 
-/** Classifica cada lançamento do histórico em Presença, Falta, Falta não avisada ou Substituição. */
+/** Classifica cada lançamento do histórico em Presença, Falta, Falta não avisada, Falta do Professor ou Substituição. */
 function situacaoDe(entry: HistoricoEntry): Situacao {
   if (entry.tipo === 'reagendamento') {
     if (entry.status === 'presente') return 'Presença';
     if (entry.status === 'falta') return 'Falta';
     return 'Substituição';
   }
+  if (entry.faltaProfessor) return 'Falta do Professor';
   if (entry.faltaTipo === 'nao_avisada') return 'Falta não avisada';
   if (entry.reagendadoPara) return 'Substituição';
   if (entry.status === 'presente') return 'Presença';
@@ -60,6 +63,11 @@ function observacaoDe(entry: HistoricoEntry): string {
     return entry.status === 'falta' && entry.faltaObservacao
       ? `${origem} — ${entry.faltaObservacao}`
       : origem;
+  }
+  if (entry.faltaProfessor) {
+    return entry.reagendadoPara
+      ? `Sem cobrança • Reposição em ${formatDateLabel(entry.reagendadoPara.data)} às ${entry.reagendadoPara.horario}`
+      : 'Sem cobrança • Reposição necessária';
   }
   if (entry.faltaTipo === 'nao_avisada') {
     return 'Cobrada • Sem reposição';
@@ -130,6 +138,9 @@ function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
         )}
         {entry.faltaTipo === 'nao_avisada' && (
           <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Cobrada • Sem reposição</p>
+        )}
+        {entry.faltaProfessor && (
+          <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Sem cobrança • Reposição necessária</p>
         )}
       </div>
     </div>
@@ -239,8 +250,8 @@ function HistoricoTable({ entries, mostrarAluno }: { entries: HistoricoComAluno[
     <div className="avoid-break" style={{ marginTop: 20 }}>
       <h3 style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>Histórico Detalhado de Agendamentos</h3>
       <p style={{ fontSize: 10, color: '#64748b', marginBottom: 8, maxWidth: 560 }}>
-        Listagem completa das aulas no período, com identificação de Presença, Falta, Falta Não Avisada ou
-        Substituição, servindo como auditoria física.
+        Listagem completa das aulas no período, com identificação de Presença, Falta, Falta Não Avisada, Falta
+        do Professor ou Substituição, servindo como auditoria física.
       </p>
 
       {entries.length === 0 ? (

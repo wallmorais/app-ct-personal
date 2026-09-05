@@ -279,3 +279,65 @@ describe('Falta Avisada vs Não Avisada', () => {
     expect(entries.every((e) => e.faltaTipo === undefined)).toBe(true);
   });
 });
+
+describe('Falta do Professor — não é falta do aluno', () => {
+  it('não cobra, não consome contagem de faltas do aluno, mas é elegível para reposição', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'falta',
+        faltaProfessor: true,
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.faturamento).toBe(0);
+    expect(stats.presencas).toBe(0);
+    expect(stats.faltas).toBe(0); // não é falta do aluno
+    expect(stats.faltasProfessor).toBe(1);
+  });
+
+  it('falta do professor com reposição concluída conta reposição normalmente', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({
+        alunoId: aluno.id,
+        data: '2026-07-10',
+        status: 'presente',
+        faltaProfessor: true,
+        reposicaoData: '2026-07-20',
+        reposicaoHorario: '08:00',
+        reposicaoStatus: 'concluida',
+      }),
+    ];
+    const stats = statsDoAluno(aluno, registros, range);
+    expect(stats.presencas).toBe(1);
+    expect(stats.faturamento).toBe(100);
+    expect(stats.reposicoes).toBe(1);
+    expect(stats.faltas).toBe(0);
+  });
+
+  it('faltasProfessor é agregado corretamente em overviewStats, sem contaminar totalFaltas', () => {
+    const alunoA = buildAluno({ nome: 'A', valorAula: 100 });
+    const alunoB = buildAluno({ nome: 'B', valorAula: 100 });
+    const registros = [
+      buildRegistro({ alunoId: alunoA.id, data: '2026-07-08', status: 'falta', faltaProfessor: true }),
+      buildRegistro({ alunoId: alunoB.id, data: '2026-07-08', status: 'falta', faltaProfessor: true }),
+      buildRegistro({ alunoId: alunoB.id, data: '2026-07-15', status: 'falta', faltaTipo: 'avisada' }),
+    ];
+    const overview = overviewStats(buildEmptyData({ alunos: [alunoA, alunoB], registros }), range);
+    expect(overview.totalFaltasProfessor).toBe(2);
+    expect(overview.totalFaltas).toBe(1); // só a falta avisada do aluno B
+  });
+
+  it('historicoDoAluno propaga faltaProfessor', () => {
+    const aluno = buildAluno({ valorAula: 100 });
+    const registros = [
+      buildRegistro({ alunoId: aluno.id, data: '2026-07-10', status: 'falta', faltaProfessor: true }),
+    ];
+    const [entry] = historicoDoAluno(aluno, registros, range);
+    expect(entry.status).toBe('falta');
+    expect(entry.faltaProfessor).toBe(true);
+  });
+});

@@ -13,6 +13,7 @@ export function emptyAppData(): AppData {
     pagamentos: [],
     feriasProfessor: [],
     matriculas: [],
+    ausenciasProfessor: [],
     config: {
       notificationTime: '21:00',
       nomeProfissional: '',
@@ -50,6 +51,7 @@ export function loadData(): AppData {
     parsed.feriasProfessor ??= [];
     parsed.matriculas ??= [];
     parsed.schedules ??= [];
+    parsed.ausenciasProfessor ??= [];
 
     // Migração: ferias única → array de períodos
     if (parsed.config.ferias && parsed.feriasProfessor.length === 0) {

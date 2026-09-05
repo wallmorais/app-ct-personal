@@ -82,6 +82,15 @@ export interface Registro {
    * tentativa de antecipação que ficou "no meio do caminho", para rastreabilidade.
    */
   dataOriginalAntecipacao?: string;
+  /**
+   * true quando a aula não ocorreu por ausência do professor (não do aluno).
+   * Sempre acompanha status='falta' (não cobra, elegível para reposição), mas
+   * distingue no histórico que a causa foi do professor, não do aluno.
+   * Preservado em updates subsequentes (ex.: agendar reposição) até que o
+   * professor explicitamente marque presença ou reclassifique como falta do
+   * aluno — só então o campo é limpo (ver updateRegistro em App.tsx).
+   */
+  faltaProfessor?: boolean;
 }
 
 /** Tipo de movimentação derivado por comparação de datas — nunca persistido. */
@@ -96,6 +105,21 @@ export interface ProfessorVacation {
   id: string;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  observacao?: string;
+  createdAt: string; // ISO
+}
+
+export type MotivoAusencia = 'doenca' | 'compromisso_pessoal' | 'imprevisto' | 'outro';
+
+/**
+ * Ausência pontual do professor (dia inteiro) — distinta de Férias (período
+ * planejado). Uma ausência por data (não por slot/horário): ao ser registrada,
+ * afeta todas as aulas daquele dia, de todos os alunos, automaticamente.
+ */
+export interface ProfessorAbsence {
+  id: string;
+  data: string; // YYYY-MM-DD
+  motivo: MotivoAusencia;
   observacao?: string;
   createdAt: string; // ISO
 }
@@ -128,6 +152,7 @@ export interface AppData {
   pagamentos: Pagamento[];
   feriasProfessor: ProfessorVacation[];
   matriculas: StudentEnrollment[];
+  ausenciasProfessor: ProfessorAbsence[];
 }
 
 export interface Profile {

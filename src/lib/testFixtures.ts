@@ -20,6 +20,7 @@ export function buildEmptyData(overrides: Partial<AppData> = {}): AppData {
     pagamentos: [],
     feriasProfessor: [],
     matriculas: [],
+    ausenciasProfessor: [],
     ...overrides,
   };
 }

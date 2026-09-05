@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor, Palmtree, Plus, Pencil, Mail, Lock, Loader2, CheckCircle2, MapPin, Phone } from 'lucide-react';
+import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDriveDownload, User, LogOut, Sun, Moon, Monitor, Palmtree, Plus, Pencil, Mail, Lock, Loader2, CheckCircle2, MapPin, Phone, UserX } from 'lucide-react';
 import { supabase, isSupabaseConfigured, traduzErroAuth } from '../lib/supabase';
-import type { AppData, Profile, ProfessorVacation } from '../types';
+import type { AppData, Profile, ProfessorVacation, MotivoAusencia, ProfessorAbsence } from '../types';
 import type { ThemePref } from '../lib/theme';
 import { updateProfile } from '../lib/supabaseRepo';
-import { findOverlappingVacation } from '../lib/periods';
+import {
+  findOverlappingVacation,
+  isProfessorOnVacation,
+  previewProfessorAbsence,
+  applyProfessorAbsence,
+  previewAbsenceCancel,
+  cancelProfessorAbsence,
+} from '../lib/periods';
 import {
   exportData,
   importData,
@@ -24,6 +31,13 @@ import {
 } from '../lib/notifications';
 import Toast, { type ToastState } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
+
+const MOTIVO_LABELS: Record<MotivoAusencia, string> = {
+  doenca: 'Doença',
+  compromisso_pessoal: 'Compromisso pessoal',
+  imprevisto: 'Imprevisto',
+  outro: 'Outro',
+};
 
 interface Props {
   data: AppData;
@@ -211,6 +225,170 @@ function FeriasSection({ data, setData }: { data: AppData; setData: Props['setDa
           onConfirm={() => commitSave(conflito.id)}
         />
       )}
+    </section>
+  );
+}
+
+function AusenciasSection({ data, setData }: { data: AppData; setData: Props['setData'] }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [dataAusencia, setDataAusencia] = useState('');
+  const [motivo, setMotivo] = useState<MotivoAusencia>('doenca');
+  const [obs, setObs] = useState('');
+  const [erro, setErro] = useState('');
+  const [confirmCriar, setConfirmCriar] = useState<{ jaRegistradas: number } | null>(null);
+  const [confirmCancelar, setConfirmCancelar] = useState<{ absence: ProfessorAbsence; revertCount: number } | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  const sorted = [...data.ausenciasProfessor].sort((a, b) => b.data.localeCompare(a.data));
+
+  function openNew() {
+    setDataAusencia('');
+    setMotivo('doenca');
+    setObs('');
+    setErro('');
+    setFormOpen(true);
+  }
+
+  function handleSave() {
+    if (!dataAusencia) { setErro('Selecione a data.'); return; }
+    if (isProfessorOnVacation(data, dataAusencia)) {
+      setErro('Este dia está dentro de um período de férias do professor. Não é necessário registrar uma ausência.');
+      return;
+    }
+    if (data.ausenciasProfessor.some((a) => a.data === dataAusencia)) {
+      setErro('Já existe uma ausência registrada para esta data.');
+      return;
+    }
+
+    const preview = previewProfessorAbsence(data, dataAusencia);
+    if (preview.jaRegistradas > 0) {
+      setConfirmCriar({ jaRegistradas: preview.jaRegistradas });
+      return;
+    }
+    commitSave();
+  }
+
+  function commitSave() {
+    setData((prev) => applyProfessorAbsence(prev, dataAusencia, motivo, obs));
+    setFormOpen(false);
+    setConfirmCriar(null);
+  }
+
+  function handleCancelarClick(absence: ProfessorAbsence) {
+    const preview = previewAbsenceCancel(data, absence);
+    if (!preview.cancelable) {
+      setToast({ type: 'error', message: preview.blockedReason ?? 'Não é possível cancelar esta ausência.' });
+      return;
+    }
+    setConfirmCancelar({ absence, revertCount: preview.revertCount });
+  }
+
+  function commitCancelar() {
+    if (!confirmCancelar) return;
+    setData((prev) => cancelProfessorAbsence(prev, confirmCancelar.absence.id));
+    setConfirmCancelar(null);
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso + 'T12:00').toLocaleDateString('pt-BR');
+  }
+
+  return (
+    <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-electric">
+          <UserX size={18} />
+          <h3 className="text-sm font-semibold">Ausências do Professor</h3>
+        </div>
+        <button onClick={openNew} className="flex items-center gap-1 text-xs font-semibold text-emerald active:opacity-70">
+          <Plus size={14} /> Adicionar
+        </button>
+      </div>
+      <p className="text-xs text-base-muted">
+        Registre dias em que você não poderá realizar suas aulas. As aulas afetadas ficam sem cobrança e disponíveis para reposição.
+      </p>
+
+      {formOpen && (
+        <div className="bg-base-surface border border-base-border rounded-xl p-3 space-y-2">
+          <div>
+            <label htmlFor="ausencia-data">Data</label>
+            <input
+              id="ausencia-data"
+              type="date"
+              value={dataAusencia}
+              onChange={(e) => { setDataAusencia(e.target.value); setErro(''); }}
+            />
+          </div>
+          <div>
+            <label htmlFor="ausencia-motivo">Motivo</label>
+            <select
+              id="ausencia-motivo"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value as MotivoAusencia)}
+            >
+              {Object.entries(MOTIVO_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ausencia-obs">Observação (opcional)</label>
+            <input id="ausencia-obs" type="text" value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Detalhes adicionais..." />
+          </div>
+          {erro && <p className="text-xs text-red-600 dark:text-red-400">{erro}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => setFormOpen(false)} className="flex-1 py-2 rounded-xl bg-base-card border border-base-border text-xs font-semibold active:bg-base-hover/5">
+              Cancelar
+            </button>
+            <button onClick={handleSave} className="flex-1 py-2 rounded-xl bg-emerald text-black text-xs font-semibold active:bg-emerald/80">
+              Registrar ausência
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sorted.length === 0 && !formOpen && (
+        <p className="text-xs text-base-muted text-center py-2">Nenhuma ausência registrada.</p>
+      )}
+
+      {sorted.map((a) => (
+        <div key={a.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5">
+          <div>
+            <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+              {fmtDate(a.data)} · {MOTIVO_LABELS[a.motivo]}
+            </p>
+            {a.observacao && <p className="text-[11px] text-red-600/70 dark:text-red-400/70">{a.observacao}</p>}
+          </div>
+          <button
+            onClick={() => handleCancelarClick(a)}
+            className="text-[11px] font-semibold text-red-600 dark:text-red-400 active:opacity-70 shrink-0 ml-2"
+          >
+            Cancelar ausência
+          </button>
+        </div>
+      ))}
+
+      {confirmCriar && (
+        <ConfirmDialog
+          title="Aulas já registradas nesta data"
+          message={`${confirmCriar.jaRegistradas} aula(s) já possuem status definido e não serão alteradas. As demais aulas pendentes serão marcadas como Falta do Professor. Deseja continuar?`}
+          confirmLabel="Registrar mesmo assim"
+          onCancel={() => setConfirmCriar(null)}
+          onConfirm={commitSave}
+        />
+      )}
+
+      {confirmCancelar && (
+        <ConfirmDialog
+          title="Cancelar ausência"
+          message={`${fmtDate(confirmCancelar.absence.data)}: ${confirmCancelar.revertCount} aula(s) voltarão para pendente. Deseja confirmar?`}
+          confirmLabel="Confirmar cancelamento"
+          onCancel={() => setConfirmCancelar(null)}
+          onConfirm={commitCancelar}
+        />
+      )}
+
+      {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
     </section>
   );
 }
@@ -565,6 +743,9 @@ export default function ConfigView({
 
       {/* Férias do professor */}
       <FeriasSection data={data} setData={setData} />
+
+      {/* Ausências do professor */}
+      <AusenciasSection data={data} setData={setData} />
 
       {/* ═══════════ GRUPO: AGENDA ═══════════ */}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-base-muted px-1 pt-2">Agenda</p>
