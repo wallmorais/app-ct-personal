@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Plus, ChevronRight, Phone, Users, Search, MessageCircle, Cake, Target, AlertCircle } from 'lucide-react';
 import type { Aluno, AppData } from '../types';
-import { getEnrollmentsForStudent } from '../lib/periods';
+import { getEnrollmentsForStudent, getEtapasAtivas, getEtapaCorrente, rebuildMatriculasDoAluno } from '../lib/periods';
 import { statsDoAluno, formatBRL, registrosNoPeriodo } from '../lib/billing';
 import { addDays, todayISO, formatDateShort, formatDateLabel } from '../lib/date';
-import AlunoFormModal, { type AgendaDia } from './AlunoFormModal';
+import AlunoFormModal, { type AgendaDia, type EtapasForm } from './AlunoFormModal';
 
 interface Props {
   data: AppData;
@@ -57,12 +57,40 @@ export default function AlunosView({ data, setData }: Props) {
     );
   }, [data.alunos, busca]);
 
-  function handleSave(aluno: Aluno, agenda: AgendaDia[], vacations: { id: string; dataInicio: string; dataFim: string }[]) {
+  function handleSave(
+    aluno: Aluno,
+    agenda: AgendaDia[],
+    vacations: { id: string; dataInicio: string; dataFim: string }[],
+    etapas: EtapasForm,
+  ) {
     setData((prev) => {
+      // Etapas do aluno (matrículas ATIVO) são o histórico; INATIVO deriva dos gaps.
+      // Os escalares dataAdesao/dataEncerramento espelham a etapa corrente resultante.
+      const correnteAtual = getEtapaCorrente(prev, aluno.id);
+      const etapasResult = rebuildMatriculasDoAluno(
+        prev.matriculas ?? [],
+        {
+          alunoId: aluno.id,
+          anteriores: etapas.anteriores,
+          corrente: {
+            id: correnteAtual?.id,
+            dataInicio: aluno.dataAdesao || correnteAtual?.dataInicio || todayISO(),
+            dataFim: aluno.dataEncerramento,
+          },
+          reativacao: etapas.reativacao,
+          ferias: vacations,
+        },
+      );
+      const alunoFinal: Aluno = {
+        ...aluno,
+        dataAdesao: etapasResult.dataAdesao,
+        dataEncerramento: etapasResult.dataEncerramento,
+      };
+
       const exists = prev.alunos.some((a) => a.id === aluno.id);
       const alunos = exists
-        ? prev.alunos.map((a) => (a.id === aluno.id ? aluno : a))
-        : [...prev.alunos, aluno];
+        ? prev.alunos.map((a) => (a.id === aluno.id ? alunoFinal : a))
+        : [...prev.alunos, alunoFinal];
 
       // Remove old schedules for this student
       let schedules = prev.schedules.filter((s) => s.alunoId !== aluno.id);
@@ -110,46 +138,7 @@ export default function AlunosView({ data, setData }: Props) {
       ]);
       slots = slots.filter((s) => usedSlotIds.has(s.id));
 
-      // Rebuild enrollments from contract dates + vacations.
-      // A única entrada ATIVO deve sempre fechar em dataEncerramento (dataFim);
-      // caso contrário ela nunca expira e mascara o registro INATIVO abaixo.
-      const now = new Date().toISOString();
-      const previousAtivo = (prev.matriculas ?? []).find(
-        (m) => m.alunoId === aluno.id && m.tipo === 'ATIVO',
-      );
-      let matriculas = (prev.matriculas ?? []).filter((m) => m.alunoId !== aluno.id);
-
-      matriculas.push({
-        id: previousAtivo?.id ?? crypto.randomUUID(),
-        alunoId: aluno.id,
-        dataInicio: aluno.dataAdesao || previousAtivo?.dataInicio || todayISO(),
-        dataFim: aluno.dataEncerramento,
-        tipo: 'ATIVO',
-        createdAt: previousAtivo?.createdAt ?? now,
-      });
-
-      for (const v of vacations) {
-        matriculas.push({
-          id: v.id,
-          alunoId: aluno.id,
-          dataInicio: v.dataInicio,
-          dataFim: v.dataFim,
-          tipo: 'FERIAS',
-          createdAt: now,
-        });
-      }
-
-      if (aluno.dataEncerramento) {
-        matriculas.push({
-          id: crypto.randomUUID(),
-          alunoId: aluno.id,
-          dataInicio: aluno.dataEncerramento,
-          tipo: 'INATIVO',
-          createdAt: now,
-        });
-      }
-
-      return { ...prev, alunos, slots, schedules, matriculas };
+      return { ...prev, alunos, slots, schedules, matriculas: etapasResult.matriculas };
     });
     setEditing(null);
   }
@@ -363,6 +352,7 @@ export default function AlunosView({ data, setData }: Props) {
                   .map((e) => ({ id: e.id, dataInicio: e.dataInicio, dataFim: e.dataFim! }))
               : []
           }
+          etapasAtivas={editing !== 'new' ? getEtapasAtivas(data, editing.id) : []}
           onSave={handleSave}
           onDelete={editing !== 'new' ? handleDelete : undefined}
           onClose={() => setEditing(null)}

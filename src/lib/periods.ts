@@ -8,7 +8,7 @@ import type {
   StudentStatus,
   TipoMovimentacao,
 } from '../types';
-import { dowOf } from './date';
+import { addDays, dowOf } from './date';
 
 export function isProfessorOnVacation(data: AppData, date: string): boolean {
   if (!data.feriasProfessor) return false;
@@ -41,13 +41,26 @@ export function getStudentStatusOnDate(data: AppData, alunoId: string, date: str
 
 export function isStudentActiveOnDate(data: AppData, alunoId: string, date: string): boolean {
   const status = getStudentStatusOnDate(data, alunoId, date);
-  if (status === null) {
-    // No enrollment records — check legacy dataAdesao, otherwise consider active
-    const aluno = data.alunos.find((a) => a.id === alunoId);
-    if (aluno?.dataAdesao) return date >= aluno.dataAdesao;
-    return true;
-  }
-  return status === 'ATIVO';
+  if (status !== null) return status === 'ATIVO';
+
+  // Nenhuma matrícula cobre a data. Só tratamos isso como "gap real" entre etapas
+  // (→ inativo) quando o aluno tem HISTÓRICO REAL de etapas: uma ATIVO já encerrada,
+  // ou mais de uma matrícula ATIVO/INATIVO relevante. Um aluno legado com apenas UMA
+  // matrícula ATIVO em aberto (nunca passou por um ciclo ativo→inativo) não conta como
+  // histórico — preserva o comportamento antigo (fallback escalar) para não fazê-lo
+  // sumir retroativamente da agenda (caso real observado: aluno com dataAdesao nula e
+  // uma única matrícula ATIVO aberta, criada pelo fluxo legado).
+  const etapasRelevantes = (data.matriculas ?? []).filter(
+    (m) => m.alunoId === alunoId && (m.tipo === 'ATIVO' || m.tipo === 'INATIVO'),
+  );
+  const temHistoricoReal =
+    etapasRelevantes.some((m) => m.tipo === 'ATIVO' && m.dataFim) || etapasRelevantes.length > 1;
+  if (temHistoricoReal) return false;
+
+  // Sem histórico real: fallback aos campos escalares do aluno (dado legado).
+  const aluno = data.alunos.find((a) => a.id === alunoId);
+  if (aluno?.dataAdesao) return date >= aluno.dataAdesao;
+  return true;
 }
 
 export function isStudentOnVacation(data: AppData, alunoId: string, date: string): boolean {
@@ -274,5 +287,174 @@ export function cancelProfessorAbsence(data: AppData, absenceId: string): AppDat
     ...data,
     registros,
     ausenciasProfessor: data.ausenciasProfessor.filter((a) => a.id !== absenceId),
+  };
+}
+
+/* ============================================================
+ * ETAPAS DO ALUNO (matrículas ATIVO como histórico)
+ * ============================================================
+ * Cada período em que o aluno esteve ativo é uma matrícula ATIVO independente
+ * (uma "etapa"). A etapa corrente é a de maior dataInicio; em aberto (sem
+ * dataFim) = aluno ativo hoje, fechada = aluno inativo hoje. Reativar cria uma
+ * NOVA etapa ATIVO — nunca reabre nem altera a anterior.
+ *
+ * As matrículas INATIVO são marcadores derivados dos gaps entre etapas ATIVO
+ * consecutivas (e após a última, se fechada). Como getStudentStatusOnDate usa
+ * intervalos INCLUSIVOS nas duas pontas, o INATIVO começa no dia SEGUINTE ao
+ * encerramento e termina no dia ANTERIOR à próxima adesão — nunca no mesmo dia,
+ * senão haveria sobreposição.
+ *
+ * Os campos escalares aluno.dataAdesao/dataEncerramento espelham sempre a
+ * etapa corrente (é o que ReposicaoModal e a agenda esperam deles).
+ * ============================================================ */
+
+/** Etapas ATIVO do aluno em ordem cronológica (dataInicio asc). */
+export function getEtapasAtivas(data: AppData, alunoId: string): StudentEnrollment[] {
+  return (data.matriculas ?? [])
+    .filter((m) => m.alunoId === alunoId && m.tipo === 'ATIVO')
+    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Etapa corrente = a ATIVO de maior dataInicio (aberta ou fechada). */
+export function getEtapaCorrente(data: AppData, alunoId: string): StudentEnrollment | undefined {
+  const etapas = getEtapasAtivas(data, alunoId);
+  return etapas[etapas.length - 1];
+}
+
+export interface EtapaInput {
+  /** id da matrícula existente (preserva identidade/createdAt); ausente = nova. */
+  id?: string;
+  dataInicio: string;
+  dataFim?: string;
+}
+
+export interface RebuildEtapasInput {
+  alunoId: string;
+  /** Etapas fechadas anteriores à corrente, já com eventuais correções do formulário. */
+  anteriores: EtapaInput[];
+  /** Etapa corrente (maior dataInicio). Sem dataFim = aluno ativo. */
+  corrente: EtapaInput;
+  /**
+   * Reativação explícita: cria uma nova etapa ATIVO em aberto a partir desta data.
+   * Exige `corrente` fechada e dataInicio posterior ao seu dataFim.
+   */
+  reativacao?: { dataInicio: string };
+  ferias: { id: string; dataInicio: string; dataFim: string }[];
+}
+
+export interface RebuildEtapasResult {
+  matriculas: StudentEnrollment[];
+  /** Escalares da etapa corrente resultante, para espelhar em aluno.dataAdesao/dataEncerramento. */
+  dataAdesao: string;
+  dataEncerramento?: string;
+}
+
+/** Lista ordenada de etapas ATIVO resultante (anteriores + corrente + nova, se reativando). */
+function montarEtapas(input: Pick<RebuildEtapasInput, 'anteriores' | 'corrente' | 'reativacao'>): EtapaInput[] {
+  const etapas: EtapaInput[] = [...input.anteriores, input.corrente];
+  if (input.reativacao) etapas.push({ dataInicio: input.reativacao.dataInicio });
+  return etapas.sort((a, b) => a.dataInicio.localeCompare(b.dataInicio));
+}
+
+/**
+ * Valida o conjunto de etapas. Retorna a mensagem de erro (para exibir no
+ * formulário) ou null se válido. Mesma regra usada por rebuildMatriculasDoAluno.
+ */
+export function validarEtapas(
+  input: Pick<RebuildEtapasInput, 'anteriores' | 'corrente' | 'reativacao'>,
+): string | null {
+  if (input.reativacao) {
+    if (!input.corrente.dataFim) return 'Para reativar, a etapa atual precisa estar encerrada.';
+    if (!input.reativacao.dataInicio) return 'Informe a data de início da nova etapa.';
+    if (input.reativacao.dataInicio <= input.corrente.dataFim) {
+      return 'A nova etapa deve começar depois do encerramento da etapa anterior.';
+    }
+  }
+  const etapas = montarEtapas(input);
+  for (let i = 0; i < etapas.length; i++) {
+    const atual = etapas[i];
+    if (!atual.dataInicio) return 'Toda etapa precisa de uma data de adesão.';
+    if (atual.dataFim && atual.dataFim < atual.dataInicio) {
+      return 'Uma etapa tem encerramento anterior à adesão.';
+    }
+    const proxima = etapas[i + 1];
+    if (proxima) {
+      if (!atual.dataFim) return 'Apenas a etapa atual pode estar em aberto — encerre as anteriores.';
+      if (proxima.dataInicio <= atual.dataFim) return 'As etapas do aluno não podem se sobrepor.';
+    }
+  }
+  return null;
+}
+
+/**
+ * Reconstrói as matrículas de UM aluno a partir das etapas informadas, preservando
+ * as dos demais alunos. Etapas ATIVO mantêm id/createdAt quando já existiam;
+ * INATIVO são derivados dos gaps; FERIAS vêm da lista do formulário (ids próprios).
+ * Lança erro se validarEtapas reprovar — o formulário deve validar antes.
+ */
+export function rebuildMatriculasDoAluno(
+  prevMatriculas: StudentEnrollment[],
+  input: RebuildEtapasInput,
+  now: string = new Date().toISOString(),
+): RebuildEtapasResult {
+  const erro = validarEtapas(input);
+  if (erro) throw new Error(erro);
+
+  const { alunoId } = input;
+  const prevDoAluno = prevMatriculas.filter((m) => m.alunoId === alunoId);
+  const outras = prevMatriculas.filter((m) => m.alunoId !== alunoId);
+  const prevById = new Map(prevDoAluno.map((m) => [m.id, m]));
+
+  // 1. Etapas ATIVO, preservando id/createdAt das já existentes.
+  const ativos: StudentEnrollment[] = montarEtapas(input).map((e) => {
+    const prev = e.id ? prevById.get(e.id) : undefined;
+    return {
+      id: prev?.id ?? crypto.randomUUID(),
+      alunoId,
+      dataInicio: e.dataInicio,
+      dataFim: e.dataFim || undefined,
+      tipo: 'ATIVO',
+      createdAt: prev?.createdAt ?? now,
+    };
+  });
+
+  // 2. Deriva INATIVO nos gaps (fronteiras exclusivas: fim+1 .. próximoInício-1).
+  const prevInativoByInicio = new Map(
+    prevDoAluno.filter((m) => m.tipo === 'INATIVO').map((m) => [m.dataInicio, m]),
+  );
+  const inativos: StudentEnrollment[] = [];
+  for (let i = 0; i < ativos.length; i++) {
+    const atual = ativos[i];
+    if (!atual.dataFim) continue;
+    const inicio = addDays(atual.dataFim, 1);
+    const proxima = ativos[i + 1];
+    const fim = proxima ? addDays(proxima.dataInicio, -1) : undefined;
+    if (fim && fim < inicio) continue; // etapas adjacentes: sem gap
+    const prev = prevInativoByInicio.get(inicio);
+    inativos.push({
+      id: prev?.id ?? crypto.randomUUID(),
+      alunoId,
+      dataInicio: inicio,
+      dataFim: fim,
+      tipo: 'INATIVO',
+      createdAt: prev?.createdAt ?? now,
+    });
+  }
+
+  // 3. FERIAS vêm do formulário (ids estáveis).
+  const ferias: StudentEnrollment[] = input.ferias.map((v) => ({
+    id: v.id,
+    alunoId,
+    dataInicio: v.dataInicio,
+    dataFim: v.dataFim,
+    tipo: 'FERIAS',
+    createdAt: prevById.get(v.id)?.createdAt ?? now,
+  }));
+
+  const corrente = ativos[ativos.length - 1];
+  return {
+    matriculas: [...outras, ...ativos, ...inativos, ...ferias],
+    dataAdesao: corrente.dataInicio,
+    dataEncerramento: corrente.dataFim,
   };
 }
