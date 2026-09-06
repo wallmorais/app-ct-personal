@@ -2,6 +2,32 @@ import { supabase } from './supabase';
 import type { AppData, Profile } from '../types';
 import { buildSeedData } from './seed';
 
+export interface RemoteCollectionCounts {
+  alunos: number;
+  slots: number;
+  schedules: number;
+  registros: number;
+  pagamentos: number;
+  ferias: number;
+  matriculas: number;
+  ausencias: number;
+  hasConfig: boolean;
+}
+
+export function isRemoteEmpty(counts: RemoteCollectionCounts): boolean {
+  return (
+    counts.alunos === 0 &&
+    counts.slots === 0 &&
+    counts.schedules === 0 &&
+    counts.registros === 0 &&
+    counts.pagamentos === 0 &&
+    counts.ferias === 0 &&
+    counts.matriculas === 0 &&
+    counts.ausencias === 0 &&
+    !counts.hasConfig
+  );
+}
+
 /** Retorna null se o Supabase estiver vazio para este usuário (primeiro acesso). */
 export async function fetchAppData(userId: string): Promise<AppData | null> {
   const [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, ausenciasRes, configRes] =
@@ -21,11 +47,17 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
     if (res.error) throw res.error;
   }
 
-  const isEmpty =
-    (alunosRes.data?.length ?? 0) === 0 &&
-    (slotsRes.data?.length ?? 0) === 0 &&
-    (registrosRes.data?.length ?? 0) === 0 &&
-    !configRes.data;
+  const isEmpty = isRemoteEmpty({
+    alunos: alunosRes.data?.length ?? 0,
+    slots: slotsRes.data?.length ?? 0,
+    schedules: schedulesRes.data?.length ?? 0,
+    registros: registrosRes.data?.length ?? 0,
+    pagamentos: pagamentosRes.data?.length ?? 0,
+    ferias: feriasRes.data?.length ?? 0,
+    matriculas: matriculasRes.data?.length ?? 0,
+    ausencias: ausenciasRes.data?.length ?? 0,
+    hasConfig: !!configRes.data,
+  });
 
   if (isEmpty) {
     console.info('[PT.Control] 📭 Supabase vazio para este usuário.');
