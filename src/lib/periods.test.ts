@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyProfessorAbsence,
+  aulasDoAlunoNoPeriodo,
   cancelProfessorAbsence,
   findHorarioConflict,
   findOverlappingVacation,
@@ -851,5 +852,46 @@ describe('Ausência do Professor', () => {
     expect(rC?.status).toBe('falta');
     expect(rC?.faltaProfessor).toBe(true);
     expect(result.ausenciasProfessor).toHaveLength(1);
+  });
+});
+
+describe('aulasDoAlunoNoPeriodo — bloqueia exclusão de etapa com histórico real', () => {
+  function buildRegistro(overrides: Partial<Registro> & Pick<Registro, 'alunoId'>): Registro {
+    return { id: uid(), slotId: 'slot-1', data: '2026-01-10', horario: '07:00', status: 'pendente', ...overrides };
+  }
+
+  it('encontra aula pela data original dentro do período', () => {
+    const alunoId = uid();
+    const registros = [buildRegistro({ alunoId, data: '2026-02-15' })];
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-02-01', '2026-02-28')).toHaveLength(1);
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-03-01', '2026-03-31')).toHaveLength(0);
+  });
+
+  it('encontra aula pela data de reposição/antecipação, mesmo com data original fora do período', () => {
+    const alunoId = uid();
+    const registros = [
+      buildRegistro({ alunoId, data: '2026-01-05', reposicaoData: '2026-02-10', reposicaoHorario: '08:00' }),
+    ];
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-02-01', '2026-02-28')).toHaveLength(1);
+  });
+
+  it('período em aberto (sem fim) considera tudo a partir do início', () => {
+    const alunoId = uid();
+    const registros = [buildRegistro({ alunoId, data: '2027-06-01' })];
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-01-01')).toHaveLength(1);
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2027-07-01')).toHaveLength(0);
+  });
+
+  it('ignora aulas de outros alunos', () => {
+    const alunoId = uid();
+    const outro = uid();
+    const registros = [buildRegistro({ alunoId: outro, data: '2026-02-15' })];
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-02-01', '2026-02-28')).toHaveLength(0);
+  });
+
+  it('etapa sem nenhuma aula no período retorna vazio (exclusão seria permitida)', () => {
+    const alunoId = uid();
+    const registros = [buildRegistro({ alunoId, data: '2026-05-01' })];
+    expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-01-01', '2026-01-31')).toHaveLength(0);
   });
 });

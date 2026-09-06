@@ -321,6 +321,17 @@ export function getEtapaCorrente(data: AppData, alunoId: string): StudentEnrollm
   return etapas[etapas.length - 1];
 }
 
+/**
+ * Aulas do aluno dentro de um intervalo (inclusivo). Considera tanto a data original
+ * quanto a data de reposição/antecipação, pois qualquer uma delas "pertence" ao período.
+ * `fim` ausente = intervalo aberto. Usado para bloquear a exclusão de uma etapa que já
+ * tem histórico real por trás (relatórios daquele período não podem mudar retroativamente).
+ */
+export function aulasDoAlunoNoPeriodo(registros: Registro[], alunoId: string, inicio: string, fim?: string): Registro[] {
+  const dentro = (d?: string) => !!d && d >= inicio && (!fim || d <= fim);
+  return registros.filter((r) => r.alunoId === alunoId && (dentro(r.data) || dentro(r.reposicaoData)));
+}
+
 export interface EtapaInput {
   /** id da matrícula existente (preserva identidade/createdAt); ausente = nova. */
   id?: string;

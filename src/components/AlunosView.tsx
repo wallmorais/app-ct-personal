@@ -353,6 +353,7 @@ export default function AlunosView({ data, setData }: Props) {
               : []
           }
           etapasAtivas={editing !== 'new' ? getEtapasAtivas(data, editing.id) : []}
+          registros={data.registros}
           onSave={handleSave}
           onDelete={editing !== 'new' ? handleDelete : undefined}
           onClose={() => setEditing(null)}

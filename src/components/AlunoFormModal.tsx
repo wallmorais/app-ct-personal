@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Trash2, CalendarClock, FileText, Palmtree, Plus, RotateCcw, Pencil, History } from 'lucide-react';
-import type { Aluno, AulaSlot, DiaSemana, StudentEnrollment, StudentSchedule } from '../types';
-import { findOverlappingVacation, validarEtapas, type EtapaInput } from '../lib/periods';
+import type { Aluno, AulaSlot, DiaSemana, Registro, StudentEnrollment, StudentSchedule } from '../types';
+import { findOverlappingVacation, validarEtapas, aulasDoAlunoNoPeriodo, type EtapaInput } from '../lib/periods';
 import { todayISO } from '../lib/date';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -24,6 +24,8 @@ interface Props {
   studentVacations: StudentVacation[];
   /** Etapas ATIVO do aluno em ordem cronológica; a última é a corrente. Vazio para aluno novo. */
   etapasAtivas: StudentEnrollment[];
+  /** Todos os registros do app — usado só para bloquear exclusão de etapa com aulas no período. */
+  registros: Registro[];
   onSave: (aluno: Aluno, agenda: AgendaDia[], vacations: StudentVacation[], etapas: EtapasForm) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
@@ -80,7 +82,7 @@ function buildInitialAgenda(aluno: Aluno | null, slots: AulaSlot[], schedules: S
   return base;
 }
 
-export default function AlunoFormModal({ aluno, slots, schedules, studentVacations, etapasAtivas, onSave, onDelete, onClose }: Props) {
+export default function AlunoFormModal({ aluno, slots, schedules, studentVacations, etapasAtivas, registros, onSave, onDelete, onClose }: Props) {
   // Etapa corrente = ATIVO de maior dataInicio; anteriores = as demais (todas fechadas).
   const etapaCorrente = etapasAtivas[etapasAtivas.length - 1];
   const etapaCorrenteFechada = !!etapaCorrente?.dataFim;
@@ -103,6 +105,7 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
     etapasAtivas.slice(0, -1).map((e) => ({ id: e.id, dataInicio: e.dataInicio, dataFim: e.dataFim })),
   );
   const [editandoEtapaId, setEditandoEtapaId] = useState<string | null>(null);
+  const [confirmExcluirEtapa, setConfirmExcluirEtapa] = useState<EtapaInput | null>(null);
   const [reativando, setReativando] = useState(false);
   const [novaEtapaInicio, setNovaEtapaInicio] = useState('');
   const [etapaErro, setEtapaErro] = useState('');
@@ -218,6 +221,25 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
 
   function updateEtapaAnterior(id: string, campo: 'dataInicio' | 'dataFim', valor: string) {
     setEtapasAnteriores((prev) => prev.map((e) => (e.id === id ? { ...e, [campo]: valor } : e)));
+    setEtapaErro('');
+  }
+
+  function handleExcluirEtapaClick(etapa: EtapaInput) {
+    if (!aluno) return;
+    const aulas = aulasDoAlunoNoPeriodo(registros, aluno.id, etapa.dataInicio, etapa.dataFim);
+    if (aulas.length > 0) {
+      setEtapaErro(
+        `Esta etapa não pode ser excluída: há ${aulas.length} aula${aulas.length > 1 ? 's' : ''} registrada${aulas.length > 1 ? 's' : ''} no período (${fmtBR(etapa.dataInicio)} a ${etapa.dataFim ? fmtBR(etapa.dataFim) : '—'}). Corrija as datas em vez de excluir.`,
+      );
+      return;
+    }
+    setConfirmExcluirEtapa(etapa);
+  }
+
+  function commitExcluirEtapa() {
+    if (!confirmExcluirEtapa) return;
+    setEtapasAnteriores((prev) => prev.filter((e) => e.id !== confirmExcluirEtapa.id));
+    setConfirmExcluirEtapa(null);
     setEtapaErro('');
   }
 
@@ -456,14 +478,24 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
                             <p className="text-xs text-base-fg">
                               {fmtBR(e.dataInicio)} a {e.dataFim ? fmtBR(e.dataFim) : '—'}
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => setEditandoEtapaId(e.id!)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-base-muted active:bg-base-hover/10"
-                              aria-label="Corrigir etapa"
-                            >
-                              <Pencil size={13} />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setEditandoEtapaId(e.id!)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-base-muted active:bg-base-hover/10"
+                                aria-label="Corrigir etapa"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleExcluirEtapaClick(e)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-red-500 active:bg-red-500/20"
+                                aria-label="Excluir etapa"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -691,6 +723,16 @@ export default function AlunoFormModal({ aluno, slots, schedules, studentVacatio
             setVacConflito(null);
             setVacFormOpen(false);
           }}
+        />
+      )}
+
+      {confirmExcluirEtapa && (
+        <ConfirmDialog
+          title="Excluir etapa"
+          message={`Excluir a etapa ${fmtBR(confirmExcluirEtapa.dataInicio)} a ${confirmExcluirEtapa.dataFim ? fmtBR(confirmExcluirEtapa.dataFim) : '—'}? Não há aulas registradas neste período, então a exclusão é segura. Esta ação só é aplicada ao clicar em Salvar.`}
+          confirmLabel="Excluir etapa"
+          onCancel={() => setConfirmExcluirEtapa(null)}
+          onConfirm={commitExcluirEtapa}
         />
       )}
     </div>
