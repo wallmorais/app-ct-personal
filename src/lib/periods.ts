@@ -1,10 +1,14 @@
 import type {
+  Aluno,
   AppData,
+  AulaSlot,
   MotivoAusencia,
+  Pagamento,
   ProfessorAbsence,
   ProfessorVacation,
   Registro,
   StudentEnrollment,
+  StudentSchedule,
   StudentStatus,
   TipoMovimentacao,
 } from '../types';
@@ -467,5 +471,50 @@ export function rebuildMatriculasDoAluno(
     matriculas: [...outras, ...ativos, ...inativos, ...ferias],
     dataAdesao: corrente.dataInicio,
     dataEncerramento: corrente.dataFim,
+  };
+}
+
+export interface RemoveAlunoResult {
+  alunos: Aluno[];
+  slots: AulaSlot[];
+  schedules: StudentSchedule[];
+  registros: Registro[];
+  matriculas: StudentEnrollment[];
+  pagamentos: Pagamento[];
+}
+
+/**
+ * Remove todos os dados de UM aluno — schedules, registros, matrículas e
+ * pagamentos — preservando integralmente os de qualquer outro aluno.
+ *
+ * pagamentos precisa ser limpo aqui mesmo com FK ON DELETE CASCADE no banco
+ * (migrations/001_initial_schema.sql): persist_app_data não faz DELETE pontual
+ * por aluno, ele apaga tudo do usuário e reinsere a partir do array local a
+ * cada save. Um pagamento remanescente com aluno_id de um aluno já removido
+ * do array `alunos` faria o INSERT INTO pagamentos falhar por violação de FK
+ * no próximo sync — mesma classe de bug já corrigida para `slots` (commit
+ * c52359e), aqui prevenida na origem (estado local) em vez de no banco.
+ *
+ * Um slot só é removido se nenhum agendamento OU registro histórico
+ * remanescente (de outro aluno) ainda o referencia — removê-lo
+ * incondicionalmente quebraria a FK registros.slot_id.
+ */
+export function removeAlunoData(
+  data: Pick<AppData, 'alunos' | 'slots' | 'schedules' | 'registros' | 'matriculas' | 'pagamentos'>,
+  alunoId: string,
+): RemoveAlunoResult {
+  const schedules = data.schedules.filter((s) => s.alunoId !== alunoId);
+  const registros = data.registros.filter((r) => r.alunoId !== alunoId);
+  const usedSlotIds = new Set([
+    ...schedules.map((s) => s.slotId),
+    ...registros.map((r) => r.slotId),
+  ]);
+  return {
+    alunos: data.alunos.filter((a) => a.id !== alunoId),
+    slots: data.slots.filter((s) => usedSlotIds.has(s.id)),
+    schedules,
+    registros,
+    matriculas: (data.matriculas ?? []).filter((m) => m.alunoId !== alunoId),
+    pagamentos: (data.pagamentos ?? []).filter((p) => p.alunoId !== alunoId),
   };
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Plus, ChevronRight, Phone, Users, Search, MessageCircle, Cake, Target, AlertCircle } from 'lucide-react';
 import type { Aluno, AppData } from '../types';
-import { getEnrollmentsForStudent, getEtapasAtivas, getEtapaCorrente, rebuildMatriculasDoAluno } from '../lib/periods';
+import { getEnrollmentsForStudent, getEtapasAtivas, getEtapaCorrente, rebuildMatriculasDoAluno, removeAlunoData } from '../lib/periods';
 import { statsDoAluno, formatBRL, registrosNoPeriodo } from '../lib/billing';
 import { addDays, todayISO, formatDateShort, formatDateLabel } from '../lib/date';
 import AlunoFormModal, { type AgendaDia, type EtapasForm } from './AlunoFormModal';
@@ -144,24 +144,7 @@ export default function AlunosView({ data, setData }: Props) {
   }
 
   function handleDelete(id: string) {
-    setData((prev) => {
-      const schedules = prev.schedules.filter((s) => s.alunoId !== id);
-      const registros = prev.registros.filter((r) => r.alunoId !== id);
-      // Mesma regra do handleSave: um slot só é removido se nenhum agendamento OU
-      // registro histórico restante (de outros alunos) ainda o referencia.
-      const usedSlotIds = new Set([
-        ...schedules.map((s) => s.slotId),
-        ...registros.map((r) => r.slotId),
-      ]);
-      return {
-        ...prev,
-        alunos: prev.alunos.filter((a) => a.id !== id),
-        slots: prev.slots.filter((s) => usedSlotIds.has(s.id)),
-        schedules,
-        registros,
-        matriculas: (prev.matriculas ?? []).filter((m) => m.alunoId !== id),
-      };
-    });
+    setData((prev) => ({ ...prev, ...removeAlunoData(prev, id) }));
     setEditing(null);
   }
 

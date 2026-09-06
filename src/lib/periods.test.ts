@@ -14,13 +14,14 @@ import {
   previewAbsenceCancel,
   previewProfessorAbsence,
   rebuildMatriculasDoAluno,
+  removeAlunoData,
   tipoMovimentacao,
   vacationsOverlap,
   validarEtapas,
 } from './periods';
 import { historicoDoAluno, statsDoAluno } from './billing';
 import { buildAluno, buildEmptyData, uid } from './testFixtures';
-import type { AppData, AulaSlot, Registro, StudentEnrollment, StudentSchedule } from '../types';
+import type { AppData, AulaSlot, Pagamento, Registro, StudentEnrollment, StudentSchedule } from '../types';
 
 function buildRegistro(overrides: Partial<Registro> & Pick<Registro, 'alunoId'>): Registro {
   return {
@@ -893,5 +894,94 @@ describe('aulasDoAlunoNoPeriodo — bloqueia exclusão de etapa com histórico r
     const alunoId = uid();
     const registros = [buildRegistro({ alunoId, data: '2026-05-01' })];
     expect(aulasDoAlunoNoPeriodo(registros, alunoId, '2026-01-01', '2026-01-31')).toHaveLength(0);
+  });
+});
+
+describe('A1 — removeAlunoData: exclusão de aluno não deixa pagamentos (nem outros dados) órfãos', () => {
+  function buildPagamento(overrides: Partial<Pagamento> & Pick<Pagamento, 'alunoId'>): Pagamento {
+    return { mes: '2026-01', status: 'pendente', valor: 100, ...overrides };
+  }
+
+  it('TESTE 1 — Aluno A com 2 pagamentos, Aluno B com 1: excluir A remove só os de A', () => {
+    const alunoA = buildAluno({ nome: 'A' });
+    const alunoB = buildAluno({ nome: 'B' });
+    const data = buildEmptyData({
+      alunos: [alunoA, alunoB],
+      pagamentos: [
+        buildPagamento({ alunoId: alunoA.id, mes: '2026-01' }),
+        buildPagamento({ alunoId: alunoA.id, mes: '2026-02' }),
+        buildPagamento({ alunoId: alunoB.id, mes: '2026-01' }),
+      ],
+    });
+    const result = removeAlunoData(data, alunoA.id);
+    expect(result.pagamentos).toHaveLength(1);
+    expect(result.pagamentos[0].alunoId).toBe(alunoB.id);
+    expect(result.alunos).toEqual([alunoB]);
+  });
+
+  it('TESTE 2 — aluno sem pagamentos: exclusão continua funcionando normalmente', () => {
+    const aluno = buildAluno();
+    const data = buildEmptyData({ alunos: [aluno], pagamentos: [] });
+    const result = removeAlunoData(data, aluno.id);
+    expect(result.alunos).toHaveLength(0);
+    expect(result.pagamentos).toHaveLength(0);
+  });
+
+  it('TESTE 3 — aluno com schedules, registros, matrículas e pagamentos: tudo dele é removido', () => {
+    const aluno = buildAluno();
+    const slot: AulaSlot = { id: uid(), horario: '08:00' };
+    const schedule: StudentSchedule = { id: uid(), alunoId: aluno.id, slotId: slot.id, dias: [1, 3, 5] };
+    const registro: Registro = { id: uid(), alunoId: aluno.id, slotId: slot.id, data: '2026-01-05', horario: '08:00', status: 'presente' };
+    const matricula: StudentEnrollment = { id: uid(), alunoId: aluno.id, dataInicio: '2026-01-01', tipo: 'ATIVO', createdAt: '' };
+    const pagamento = buildPagamento({ alunoId: aluno.id });
+    const data = buildEmptyData({
+      alunos: [aluno], slots: [slot], schedules: [schedule], registros: [registro],
+      matriculas: [matricula], pagamentos: [pagamento],
+    });
+    const result = removeAlunoData(data, aluno.id);
+    expect(result.alunos).toHaveLength(0);
+    expect(result.schedules).toHaveLength(0);
+    expect(result.registros).toHaveLength(0);
+    expect(result.matriculas).toHaveLength(0);
+    expect(result.pagamentos).toHaveLength(0);
+    expect(result.slots).toHaveLength(0); // slot só usado por este aluno — também some
+  });
+
+  it('TESTE 4 — dados de OUTRO aluno permanecem intactos (schedules, registros, matrículas, pagamentos, slot compartilhado)', () => {
+    const alunoA = buildAluno({ nome: 'A' });
+    const alunoB = buildAluno({ nome: 'B' });
+    const slotCompartilhado: AulaSlot = { id: uid(), horario: '07:00' };
+    const scheduleA: StudentSchedule = { id: uid(), alunoId: alunoA.id, slotId: slotCompartilhado.id, dias: [1] };
+    const scheduleB: StudentSchedule = { id: uid(), alunoId: alunoB.id, slotId: slotCompartilhado.id, dias: [1] };
+    const registroA: Registro = { id: uid(), alunoId: alunoA.id, slotId: slotCompartilhado.id, data: '2026-01-05', horario: '07:00', status: 'presente' };
+    const registroB: Registro = { id: uid(), alunoId: alunoB.id, slotId: slotCompartilhado.id, data: '2026-01-05', horario: '07:00', status: 'presente' };
+    const matriculaB: StudentEnrollment = { id: uid(), alunoId: alunoB.id, dataInicio: '2026-01-01', tipo: 'ATIVO', createdAt: '' };
+    const pagamentoB = buildPagamento({ alunoId: alunoB.id });
+    const data = buildEmptyData({
+      alunos: [alunoA, alunoB],
+      slots: [slotCompartilhado],
+      schedules: [scheduleA, scheduleB],
+      registros: [registroA, registroB],
+      matriculas: [matriculaB],
+      pagamentos: [pagamentoB],
+    });
+    const result = removeAlunoData(data, alunoA.id);
+    expect(result.alunos).toEqual([alunoB]);
+    expect(result.schedules).toEqual([scheduleB]);
+    expect(result.registros).toEqual([registroB]);
+    expect(result.matriculas).toEqual([matriculaB]);
+    expect(result.pagamentos).toEqual([pagamentoB]);
+    // Slot compartilhado permanece: ainda referenciado pelo schedule/registro de B.
+    expect(result.slots).toEqual([slotCompartilhado]);
+  });
+
+  it('TESTE 5 — excluir aluno sem pagamento não regride (pagamentos undefined tratado como vazio)', () => {
+    const aluno = buildAluno();
+    const data = buildEmptyData({ alunos: [aluno] });
+    // @ts-expect-error simula payload legado sem o campo pagamentos
+    delete data.pagamentos;
+    const result = removeAlunoData(data, aluno.id);
+    expect(result.pagamentos).toEqual([]);
+    expect(result.alunos).toHaveLength(0);
   });
 });
