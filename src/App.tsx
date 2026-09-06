@@ -5,7 +5,7 @@ import { loadData, saveData, runScheduledBackup, emptyAppData } from './lib/stor
 import { fetchAppData, persistAppData, fetchProfile } from './lib/supabaseRepo';
 import { sendReminderNotification } from './lib/notifications';
 import { currentTimeHHMM, todayDow, todayISO } from './lib/date';
-import { isProfessorOnVacation, isStudentActiveOnDate } from './lib/periods';
+import { isProfessorOnVacation, isStudentActiveOnDate, computeUpdatedRegistro } from './lib/periods';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { getThemePref, applyTheme, setThemePref, type ThemePref } from './lib/theme';
 import BottomNav from './components/BottomNav';
@@ -247,76 +247,25 @@ export default function App() {
       const existing = prev.registros.find(
         (r) => r.alunoId === alunoId && r.slotId === slotId && r.data === dataAula,
       );
-      const observacao = status === 'falta' ? faltaObservacao?.trim() || undefined : undefined;
-      const excecao = reposicao?.excecao?.length ? reposicao.excecao : undefined;
-
-      const reposicaoStatus = reposicao ? (reposicao.reposicaoStatus ?? 'pendente') : undefined;
-
-      // Antecipação (reposicaoData anterior à data original) que não compareceu e está
-      // sendo remarcada para uma nova data: preserva a data da tentativa perdida, já
-      // que os dois campos escalares (reposicaoData/reposicaoHorario) seriam sobrescritos.
-      let dataOriginalAntecipacao = existing?.dataOriginalAntecipacao;
-      if (
-        existing?.reposicaoData &&
-        existing.reposicaoData < existing.data &&
-        existing.reposicaoStatus === 'nao_compareceu' &&
-        reposicao &&
-        reposicao.data !== existing.reposicaoData
-      ) {
-        dataOriginalAntecipacao = existing.reposicaoData;
-      }
-
-      // faltaProfessor é preservado por padrão (ex.: ao agendar/atualizar uma
-      // reposição da mesma aula) — só é limpo quando o professor explicitamente
-      // marca presença ou reclassifica a falta como do aluno (faltaTipo definido).
-      // Isso mantém a ligação ausência↔registro detectável sem precisar de um
-      // vínculo explícito (ver previewAbsenceCancel em lib/periods.ts).
-      const faltaProfessor =
-        status === 'presente' || faltaTipo !== undefined ? undefined : existing?.faltaProfessor;
+      const updated = computeUpdatedRegistro(existing, {
+        alunoId,
+        slotId,
+        dataAula,
+        horario,
+        status,
+        reposicao,
+        faltaObservacao,
+        faltaTipo,
+      });
 
       if (existing) {
         return {
           ...prev,
-          registros: prev.registros.map((r) =>
-            r.id === existing.id
-              ? {
-                  ...r,
-                  status,
-                  reposicaoData: reposicao?.data,
-                  reposicaoHorario: reposicao?.horario,
-                  reposicaoStatus,
-                  reposicaoExcecao: excecao,
-                  faltaObservacao: observacao,
-                  faltaTipo,
-                  dataOriginalAntecipacao,
-                  faltaProfessor,
-                }
-              : r,
-          ),
+          registros: prev.registros.map((r) => (r.id === existing.id ? updated : r)),
         };
       }
 
-      return {
-        ...prev,
-        registros: [
-          ...prev.registros,
-          {
-            id: crypto.randomUUID(),
-            alunoId,
-            slotId,
-            data: dataAula,
-            horario,
-            status,
-            reposicaoData: reposicao?.data,
-            reposicaoHorario: reposicao?.horario,
-            reposicaoStatus,
-            reposicaoExcecao: excecao,
-            faltaObservacao: observacao,
-            faltaTipo,
-            dataOriginalAntecipacao,
-          },
-        ],
-      };
+      return { ...prev, registros: [...prev.registros, updated] };
     });
   }
 

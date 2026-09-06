@@ -7,9 +7,12 @@ import type {
   ProfessorAbsence,
   ProfessorVacation,
   Registro,
+  StatusAula,
+  StatusReposicao,
   StudentEnrollment,
   StudentSchedule,
   StudentStatus,
+  TipoFalta,
   TipoMovimentacao,
 } from '../types';
 import { addDays, dowOf } from './date';
@@ -516,5 +519,70 @@ export function removeAlunoData(
     registros,
     matriculas: (data.matriculas ?? []).filter((m) => m.alunoId !== alunoId),
     pagamentos: (data.pagamentos ?? []).filter((p) => p.alunoId !== alunoId),
+  };
+}
+
+export interface UpdateRegistroInput {
+  alunoId: string;
+  slotId: string;
+  dataAula: string;
+  horario: string;
+  status: StatusAula;
+  reposicao?: {
+    data: string;
+    horario: string;
+    excecao?: ('ferias_professor' | 'ferias_aluno' | 'conflito_horario')[];
+    reposicaoStatus?: StatusReposicao;
+  };
+  faltaObservacao?: string;
+  faltaTipo?: TipoFalta;
+}
+
+/**
+ * Calcula o Registro resultante de uma atualização — usado tanto para criar
+ * um novo registro (existing = undefined) quanto para atualizar um existente.
+ *
+ * faltaProfessor e faltaTipo são preservados por padrão quando o caller não os
+ * informa explicitamente (ex.: agendar/remover reposição, alternar status) —
+ * só mudam quando passados de propósito (falta do professor, FaltaModal,
+ * FaltaTipoModal). Isso evita que uma atualização não relacionada apague um
+ * histórico já registrado (ver comentários em Registro.faltaTipo em types.ts).
+ */
+export function computeUpdatedRegistro(existing: Registro | undefined, input: UpdateRegistroInput): Registro {
+  const { alunoId, slotId, dataAula, horario, status, reposicao, faltaObservacao, faltaTipo } = input;
+  const faltaObservacaoFinal = status === 'falta' ? faltaObservacao?.trim() || undefined : undefined;
+  const excecao = reposicao?.excecao?.length ? reposicao.excecao : undefined;
+  const reposicaoStatus = reposicao ? (reposicao.reposicaoStatus ?? 'pendente') : undefined;
+
+  let dataOriginalAntecipacao = existing?.dataOriginalAntecipacao;
+  if (
+    existing?.reposicaoData &&
+    existing.reposicaoData < existing.data &&
+    existing.reposicaoStatus === 'nao_compareceu' &&
+    reposicao &&
+    reposicao.data !== existing.reposicaoData
+  ) {
+    dataOriginalAntecipacao = existing.reposicaoData;
+  }
+
+  const faltaProfessor =
+    status === 'presente' || faltaTipo !== undefined ? undefined : existing?.faltaProfessor;
+  const faltaTipoFinal = faltaTipo !== undefined ? faltaTipo : existing?.faltaTipo;
+
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    alunoId,
+    slotId,
+    data: dataAula,
+    horario,
+    status,
+    reposicaoData: reposicao?.data,
+    reposicaoHorario: reposicao?.horario,
+    reposicaoStatus,
+    reposicaoExcecao: excecao,
+    faltaObservacao: faltaObservacaoFinal,
+    faltaTipo: faltaTipoFinal,
+    dataOriginalAntecipacao,
+    faltaProfessor,
   };
 }

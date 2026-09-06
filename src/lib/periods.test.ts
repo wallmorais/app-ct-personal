@@ -3,6 +3,7 @@ import {
   applyProfessorAbsence,
   aulasDoAlunoNoPeriodo,
   cancelProfessorAbsence,
+  computeUpdatedRegistro,
   findHorarioConflict,
   findOverlappingVacation,
   getEtapasAtivas,
@@ -983,5 +984,167 @@ describe('A1 — removeAlunoData: exclusão de aluno não deixa pagamentos (nem 
     const result = removeAlunoData(data, aluno.id);
     expect(result.pagamentos).toEqual([]);
     expect(result.alunos).toHaveLength(0);
+  });
+});
+
+describe('computeUpdatedRegistro — preservação de faltaTipo (A3)', () => {
+  const baseInput = {
+    alunoId: 'aluno-1',
+    slotId: 'slot-1',
+    dataAula: '2026-02-10',
+    horario: '08:00',
+  };
+
+  it('TESTE 1 — falta avisada, atualização sem faltaTipo → continua "avisada"', () => {
+    const existing: Registro = {
+      id: 'r1',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'falta',
+      faltaTipo: 'avisada',
+      faltaObservacao: 'Aluno avisou por WhatsApp',
+    };
+    // Simula agendar reposição para essa falta — não informa faltaTipo.
+    const updated = computeUpdatedRegistro(existing, {
+      ...baseInput,
+      status: 'reposicao',
+      reposicao: { data: '2026-02-12', horario: '08:00' },
+    });
+    expect(updated.faltaTipo).toBe('avisada');
+  });
+
+  it('TESTE 2 — falta não avisada, atualização sem faltaTipo → continua "nao_avisada"', () => {
+    const existing: Registro = {
+      id: 'r2',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'presente',
+      faltaTipo: 'nao_avisada',
+    };
+    // Toggle de status sem informar faltaTipo.
+    const updated = computeUpdatedRegistro(existing, { ...baseInput, status: 'presente' });
+    expect(updated.faltaTipo).toBe('nao_avisada');
+  });
+
+  it('TESTE 3 — atualização passando explicitamente novo faltaTipo → novo valor é aplicado', () => {
+    const existing: Registro = {
+      id: 'r3',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'falta',
+      faltaTipo: 'avisada',
+    };
+    const updated = computeUpdatedRegistro(existing, {
+      ...baseInput,
+      status: 'presente',
+      faltaTipo: 'nao_avisada',
+    });
+    expect(updated.faltaTipo).toBe('nao_avisada');
+  });
+
+  it('TESTE 4 — registro antigo sem faltaTipo → continua sem faltaTipo (undefined)', () => {
+    const existing: Registro = {
+      id: 'r4',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'pendente',
+    };
+    const updated = computeUpdatedRegistro(existing, { ...baseInput, status: 'presente' });
+    expect(updated.faltaTipo).toBeUndefined();
+  });
+
+  it('TESTE 5 — faltaProfessor=true, atualização sem faltaProfessor → continua true', () => {
+    const existing: Registro = {
+      id: 'r5',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'falta',
+      faltaProfessor: true,
+    };
+    // Agenda reposição da aula afetada — comportamento de faltaProfessor não deve mudar.
+    const updated = computeUpdatedRegistro(existing, {
+      ...baseInput,
+      status: 'reposicao',
+      reposicao: { data: '2026-02-15', horario: '08:00' },
+    });
+    expect(updated.faltaProfessor).toBe(true);
+  });
+
+  it('TESTE 6 — agendar reposição de falta avisada → faltaTipo continua "avisada"', () => {
+    const existing: Registro = {
+      id: 'r6',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'falta',
+      faltaTipo: 'avisada',
+      faltaObservacao: 'Consulta médica',
+    };
+    const updated = computeUpdatedRegistro(existing, {
+      ...baseInput,
+      status: 'reposicao',
+      reposicao: { data: '2026-02-14', horario: '09:00', reposicaoStatus: 'pendente' },
+    });
+    expect(updated.faltaTipo).toBe('avisada');
+    expect(updated.reposicaoData).toBe('2026-02-14');
+  });
+
+  it('TESTE 7 — remover reposição (volta para pendente) → faltaTipo continua preservado', () => {
+    const existing: Registro = {
+      id: 'r7',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'reposicao',
+      faltaTipo: 'avisada',
+      reposicaoData: '2026-02-14',
+      reposicaoHorario: '09:00',
+      reposicaoStatus: 'pendente',
+    };
+    // Remoção da reposição: status volta a 'pendente', sem passar reposicao nem faltaTipo.
+    const updated = computeUpdatedRegistro(existing, { ...baseInput, status: 'pendente' });
+    expect(updated.faltaTipo).toBe('avisada');
+    expect(updated.reposicaoData).toBeUndefined();
+  });
+
+  it('TESTE 8 — toggle de status pendente→presente→pendente não regride outros campos', () => {
+    const existing: Registro = {
+      id: 'r8',
+      alunoId: 'aluno-1',
+      slotId: 'slot-1',
+      data: '2026-02-10',
+      horario: '08:00',
+      status: 'pendente',
+    };
+    const presente = computeUpdatedRegistro(existing, { ...baseInput, status: 'presente' });
+    expect(presente.status).toBe('presente');
+    expect(presente.faltaTipo).toBeUndefined();
+    expect(presente.faltaProfessor).toBeUndefined();
+
+    const voltaPendente = computeUpdatedRegistro(presente, { ...baseInput, status: 'pendente' });
+    expect(voltaPendente.status).toBe('pendente');
+    expect(voltaPendente.faltaTipo).toBeUndefined();
+  });
+
+  it('registro novo (existing=undefined) usa faltaTipo informado normalmente', () => {
+    const created = computeUpdatedRegistro(undefined, {
+      ...baseInput,
+      status: 'falta',
+      faltaTipo: 'nao_avisada',
+    });
+    expect(created.faltaTipo).toBe('nao_avisada');
+    expect(created.id).toBeTruthy();
   });
 });
