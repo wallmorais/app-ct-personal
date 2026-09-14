@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { AppData, Profile, StatusAula, ViewName } from './types';
 import { loadData, saveData, runScheduledBackup, emptyAppData } from './lib/storage';
@@ -11,11 +11,11 @@ import { getThemePref, applyTheme, setThemePref, type ThemePref } from './lib/th
 import BottomNav from './components/BottomNav';
 import SidebarNav from './components/SidebarNav';
 import AlertBanner from './components/AlertBanner';
-import AgendaView from './components/AgendaView';
-import ReposicoesView from './components/ReposicoesView';
-import AlunosView from './components/AlunosView';
-import RelatoriosView from './components/RelatoriosView';
-import ConfigView from './components/ConfigView';
+const AgendaView = lazy(() => import('./components/AgendaView'));
+const ReposicoesView = lazy(() => import('./components/ReposicoesView'));
+const AlunosView = lazy(() => import('./components/AlunosView'));
+const RelatoriosView = lazy(() => import('./components/RelatoriosView'));
+const ConfigView = lazy(() => import('./components/ConfigView'));
 import AuthView from './components/AuthView';
 import ResetPasswordView from './components/ResetPasswordView';
 import { Logo } from './components/Logo';
@@ -321,29 +321,41 @@ export default function App() {
         )}
 
         <main className="flex-1 px-[max(1rem,env(safe-area-inset-left))] pt-4 lg:pt-8 pb-28 lg:pb-10 max-w-md sm:max-w-2xl lg:max-w-4xl w-full mx-auto">
-          {view === 'hoje' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
-          {view === 'reposicoes' && <ReposicoesView data={data} onUpdateRegistro={updateRegistro} />}
-          {view === 'alunos' && <AlunosView data={data} setData={setData} />}
-          {view === 'relatorios' && <RelatoriosView data={data} profile={profile} />}
-          {view === 'config' && (
-            <ConfigView
-              data={data}
-              setData={setData}
-              pendingToday={pendingToday}
-              onTestNotification={() => setForceAlert(true)}
-              themePref={themePref}
-              onChangeTheme={changeTheme}
-              profile={profile}
-              onProfileChange={setProfile}
-              session={typeof session === 'object' ? session : null}
-            />
-          )}
+          <Suspense fallback={<ViewLoadingFallback />}>
+            {view === 'hoje' && <AgendaView data={data} onUpdateRegistro={updateRegistro} />}
+            {view === 'reposicoes' && <ReposicoesView data={data} onUpdateRegistro={updateRegistro} />}
+            {view === 'alunos' && <AlunosView data={data} setData={setData} />}
+            {view === 'relatorios' && <RelatoriosView data={data} profile={profile} />}
+            {view === 'config' && (
+              <ConfigView
+                data={data}
+                setData={setData}
+                pendingToday={pendingToday}
+                onTestNotification={() => setForceAlert(true)}
+                themePref={themePref}
+                onChangeTheme={changeTheme}
+                profile={profile}
+                onProfileChange={setProfile}
+                session={typeof session === 'object' ? session : null}
+              />
+            )}
+          </Suspense>
         </main>
 
         <div className="no-print">
           <BottomNav view={view} onChange={setView} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Fallback do Suspense enquanto o chunk da view (code-split) é baixado.
+// Mesmo spinner já usado no loading da sessão, sem ocupar a tela toda.
+function ViewLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin" />
     </div>
   );
 }
