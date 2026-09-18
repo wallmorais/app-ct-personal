@@ -16,7 +16,7 @@ import {
 } from '../lib/periods';
 import {
   exportData,
-  importData,
+  parseBackupPayload,
   listBackups,
   createAutoBackup,
   downloadBackup,
@@ -641,6 +641,7 @@ export default function ConfigView({
   const [backups, setBackups] = useState<BackupEntry[]>(() => listBackups());
   const [toast, setToast] = useState<ToastState | null>(null);
   const [backupParaExcluir, setBackupParaExcluir] = useState<string | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<AppData | null>(null);
 
   useEffect(() => {
     setBackups(listBackups());
@@ -678,9 +679,9 @@ export default function ConfigView({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const imported = await importData(file);
-      setData(imported);
-      setToast({ type: 'success', message: 'Backup importado com sucesso!' });
+      const texto = await file.text();
+      const parsed = parseBackupPayload(texto);
+      setPendingBackup(parsed);
     } catch (err) {
       setToast({
         type: 'error',
@@ -689,6 +690,17 @@ export default function ConfigView({
     } finally {
       e.target.value = '';
     }
+  }
+
+  function handleCancelImport() {
+    setPendingBackup(null);
+  }
+
+  function handleConfirmImport() {
+    if (!pendingBackup) return;
+    setData(pendingBackup);
+    setPendingBackup(null);
+    setToast({ type: 'success', message: 'Backup importado com sucesso!' });
   }
 
   const proximoBackup = nextBackupDate();
@@ -939,6 +951,16 @@ export default function ConfigView({
           message={`Excluir o backup ${backupParaExcluir}?`}
           onCancel={() => setBackupParaExcluir(null)}
           onConfirm={() => handleDeleteBackup(backupParaExcluir)}
+        />
+      )}
+
+      {pendingBackup && (
+        <ConfirmDialog
+          title="Importar backup?"
+          message="A importação substituirá os dados atuais do aplicativo pelos dados deste backup. Confirme somente se você deseja restaurar este arquivo."
+          confirmLabel="Importar backup"
+          onCancel={handleCancelImport}
+          onConfirm={handleConfirmImport}
         />
       )}
     </div>
