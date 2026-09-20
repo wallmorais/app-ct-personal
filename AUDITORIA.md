@@ -28,11 +28,11 @@ Este documento **não substitui** os testes automatizados (`npm test`) nem a aud
 
 ## 2. Estado Atual do Projeto
 
-Última validação conhecida — commit `857b8a2` ("B4.2: testes de integração UI→onSave para AlunoFormModal") e commit imediatamente anterior `0b3c708`, ambos de 2026-09-14:
+Última validação conhecida — commit `fc7cae3` ("B4.5: testes de componente para RelatoriosView") de 2026-09-15:
 
 | Verificação | Resultado |
 |---|---|
-| Testes (`npm test`) | ✅ 148/148 passando |
+| Testes (`npm test`) | ✅ 174/174 passando (10 arquivos de teste) |
 | TypeScript (`npx tsc --noEmit`) | ✅ OK, sem erros |
 | Build (`npm run build`) | ✅ OK |
 | CI `validate` (GitHub Actions, M4) | ✅ success |
@@ -91,6 +91,9 @@ Nenhum bug aberto registrado na auditoria atual.
 | B1 | Code splitting das 5 views principais via `React.lazy` + `Suspense` em `App.tsx` (AuthView permanece estática, necessária antes da autenticação) | Bundle inicial reduzido de 518.82 kB → 398.63 kB (-23%); warning de chunk >500 kB eliminado; 16 chunks no build | ✅ Concluído |
 | B4.1 | Testes de componente — `AgendaView` (marcar presença, falta avisada/não avisada, abrir modal de reposição); ambiente `jsdom` isolado por arquivo via `// @vitest-environment jsdom`, ambiente padrão (`node`) preservado para os testes de `lib/` | 7 testes em `AgendaView.test.tsx`; suíte total subiu de 135 → 142 testes | ✅ Concluído |
 | B4.2 | Testes de componente — `AlunoFormModal` (criação com agenda, edição reconstruindo agenda via `buildInitialAgenda`, bloqueio de nome vazio/horário inválido, bloqueio de exclusão de etapa com aula registrada, fluxo de reativação) | 6 testes em `AlunoFormModal.test.tsx`; suíte total subiu de 142 → 148 testes; CI `validate` = success | ✅ Concluído |
+| B4.3 | Testes de componente — `ReposicoesView` (filtros por status, navegação de mês, transições concluída/não compareceu/cancelada, reagendar com validações de adesão/férias/data igual) | 8 testes em `ReposicoesView.test.tsx`; suíte total subiu de 148 → 156 testes | ✅ Concluído |
+| B4.4 | Testes de componente — `AuthView` (validação e-mail vazio/inválido, login com erro traduzido, cadastro com senha curta/divergente, cadastro bem-sucedido com reenvio, recuperação de senha, Supabase não configurado) | 8 testes em `AuthView.test.tsx`; suíte total subiu de 156 → 164 testes | ✅ Concluído |
+| B4.5 | Testes de componente — `RelatoriosView` (overview do período, navegação mês anterior, detalhamento por aluno, filtro de alunos, falta do professor sem cobrança, falta não avisada cobrada, extrato itemizado, impressão via `window.print()`, comportamento defensivo sem aulas) | 10 testes em `RelatoriosView.test.tsx`; suíte total subiu de 164 → 174 testes | ✅ Concluído |
 
 ---
 
@@ -98,7 +101,7 @@ Nenhum bug aberto registrado na auditoria atual.
 
 | ID | Pendência | Prioridade | Risco | Próxima Ação |
 |---|---|---|---|---|
-| B4.3+ | Próximos componentes de teste de componente (candidatos já identificados em auditoria anterior: `AuthView`, `ReposicoesView`) | Média | Baixo — a lógica de negócio subjacente já está coberta por `periods.test.ts`/`billing.test.ts`; a lacuna é só de integração UI | Aguardar decisão do responsável sobre qual componente priorizar |
+| — | Cobertura de componentes críticos fechada (B4.1 AgendaView, B4.2 AlunoFormModal, B4.3 ReposicoesView, B4.4 AuthView, B4.5 RelatoriosView) | — | — | Ciclo B4 encerrado; próximos testes de componente serão sob demanda |
 | B5 | Escopo ainda não definido | — | — | `PENDENTE / DECIDIR DEPOIS` |
 | Supabase Preview | Check de CI falhando de forma consistente (commits `0b3c708` e `857b8a2`) | A definir | A definir — causa raiz não investigada | Validação humana da integração de preview/branching do Supabase; não investigar ou alterar configuração sem autorização explícita |
 | Riscos ConfigView | Riscos 1–5 catalogados em `AUDITORIA_CONFIG.md` (destaque: Risco 1 — importar backup sem confirmação, único caminho identificado que pode sobrescrever dados reais sem chance de desfazer) | Risco 1: Alta / Riscos 2–3: Média / Riscos 4–5: Baixa | Ver classificação detalhada no documento | Ver recomendações em `AUDITORIA_CONFIG.md`, seção 9 |
@@ -116,6 +119,9 @@ Marcos registrados apenas quando a data pôde ser confirmada pelo histórico do 
 | 2026-09-14 | Primeira reconciliação de status deste documento: BUG-04 marcado como corrigido, seção de status das melhorias adicionada (commit `0b3c708`) |
 | 2026-09-14 | B4.2 (testes de `AlunoFormModal`) concluído e validado em CI (commit `857b8a2`) |
 | 2026-09-14 | Reestruturação deste documento como Painel de Controle Técnico (esta tarefa — B3) |
+| 2026-09-14 | B4.3 (testes de `ReposicoesView`) concluído — 8 testes adicionados (commit `07eff32`) |
+| 2026-09-15 | B4.4 (testes de `AuthView`) concluído — 8 testes adicionados (commit `df6792c`) |
+| 2026-09-15 | B4.5 (testes de `RelatoriosView`) concluído — 10 testes adicionados (commit `fc7cae3`). Encerramento da cobertura planejada de testes de componentes críticos |
 
 > Não foi possível determinar com segurança a data de criação original do checklist de regressão (seção 8) anterior a 2026-07-06 — os commits mais antigos que tocam este arquivo no histórico disponível são de 2026-07-06.
 

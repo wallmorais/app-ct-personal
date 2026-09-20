@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, Palmtree, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, CheckCircle2, XCircle, RotateCw, FileDown, Clock, Check, Palmtree, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import type { AppData, Profile } from '../types';
 import { formatDateLabel, monthLabel, startOfMonth, shiftMonth, addDays } from '../lib/date';
 import { getEnrollmentsForStudent, getVacationsInRange } from '../lib/periods';
@@ -102,30 +102,6 @@ function formatReposicaoStats(rs: AlunoStats['reposicaoStats']): string {
 
 interface HistoricoComAluno extends HistoricoEntry {
   alunoNome: string;
-}
-
-/**
- * No iOS, um app aberto pela tela de início (modo standalone) roda sem a UI
- * do Safari — `window.print()` não tem onde anexar a folha de impressão e
- * silenciosamente não faz nada (sem exceção, sem console.error). Detectamos
- * essa condição para avisar o usuário em vez de deixar o clique "sumir".
- */
-function isIosStandalone(): boolean {
-  const nav = window.navigator as Navigator & { standalone?: boolean };
-  if (!/iPad|iPhone|iPod/.test(nav.userAgent)) return false;
-  if (nav.standalone === true) return true;
-  return typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
-}
-
-function handleGerarPDF() {
-  if (isIosStandalone()) {
-    window.alert(
-      'Não é possível gerar o PDF pelo app instalado na tela de início do iPhone/iPad.\n\n' +
-        'Abra o endereço do aplicativo pelo Safari (fora do app instalado) e toque em "Gerar PDF" novamente.',
-    );
-    return;
-  }
-  window.print();
 }
 
 /* ---------- Histórico na tela (cards) ---------- */
@@ -329,6 +305,7 @@ export default function RelatoriosView({ data, profile }: Props) {
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange>(() => currentMonthRange());
   const [modoIntervalo, setModoIntervalo] = useState<'mes' | 'periodo'>('mes');
+  const [pdfStatus, setPdfStatus] = useState<'idle' | 'generating' | 'error'>('idle');
 
   const stats = useMemo(() => overviewStats(data, range), [data, range]);
   const emitidoEm = useMemo(() => new Date().toLocaleString('pt-BR'), []);
@@ -407,6 +384,33 @@ export default function RelatoriosView({ data, profile }: Props) {
 
   const temFeriasNoPeriodo = feriasProfessorNoPeriodo.length > 0 || feriasAlunosNoPeriodo.length > 0;
 
+  async function handleGerarPDF() {
+    setPdfStatus('generating');
+    try {
+      const { generateReportPdf, downloadPdfBlob } = await import('../lib/reportPdf');
+      const bytes = generateReportPdf({
+        data,
+        range,
+        nomeProfissional,
+        registroProfissional,
+        escopo,
+        listaAtiva,
+        historicoDetalhado,
+        mostrarAlunoNoHistorico,
+        feriasProfessor: feriasProfessorNoPeriodo,
+        feriasAlunos: feriasAlunosNoPeriodo,
+      });
+      const [, m, y] = range.start.split('-');
+      downloadPdfBlob(bytes, `relatorio-${y}-${m}.pdf`);
+      setPdfStatus('idle');
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Erro ao gerar PDF:', err);
+      setPdfStatus('error');
+      setTimeout(() => setPdfStatus('idle'), 4000);
+    }
+  }
+
   return (
     <div id="relatorio-print" className="space-y-5">
       {/* Cabeçalho do documento — só na impressão */}
@@ -454,12 +458,23 @@ export default function RelatoriosView({ data, profile }: Props) {
         </div>
         <button
           onClick={handleGerarPDF}
-          className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
+          disabled={pdfStatus === 'generating'}
+          className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0 disabled:opacity-60"
         >
-          <FileDown size={16} strokeWidth={2.5} />
-          Gerar PDF
+          {pdfStatus === 'generating' ? (
+            <Loader2 size={16} strokeWidth={2.5} className="animate-spin" />
+          ) : (
+            <FileDown size={16} strokeWidth={2.5} />
+          )}
+          {pdfStatus === 'generating' ? 'Gerando PDF...' : 'Gerar PDF'}
         </button>
       </div>
+
+      {pdfStatus === 'error' && (
+        <div className="no-print bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm rounded-xl px-4 py-2.5 font-medium">
+          Erro ao gerar o PDF. Tente novamente.
+        </div>
+      )}
 
       {/* Toggle Mês / Período — só na tela */}
       <div className="no-print grid grid-cols-2 gap-2 bg-base-surface border border-base-border rounded-xl p-1">

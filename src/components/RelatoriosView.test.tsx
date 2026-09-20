@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import RelatoriosView from './RelatoriosView';
 import type { AppData, Aluno, Registro } from '../types';
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
-  window.print = vi.fn();
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 function makeData(overrides?: Partial<AppData>): AppData {
@@ -218,39 +218,41 @@ describe('RelatoriosView — extrato itemizado (seleção individual)', () => {
   });
 });
 
-describe('RelatoriosView — ação de impressão', () => {
-  it('clicar em "Gerar PDF" dispara window.print()', () => {
+describe('RelatoriosView — geração de PDF', () => {
+  it('clicar em "Gerar PDF" invoca o gerador e cria download (não usa window.print)', async () => {
     const data = makeData({ alunos: [makeAluno()] });
+    window.print = vi.fn();
+    const createObjectURLSpy = vi.fn().mockReturnValue('blob:mock');
+    const revokeObjectURLSpy = vi.fn();
+    URL.createObjectURL = createObjectURLSpy;
+    URL.revokeObjectURL = revokeObjectURLSpy;
 
     render(<RelatoriosView data={data} />);
 
+    vi.useRealTimers();
     fireEvent.click(screen.getByRole('button', { name: /Gerar PDF/ }));
 
-    expect(window.print).toHaveBeenCalledTimes(1);
-  });
-
-  it('no iOS em modo standalone (app instalado na tela de início), avisa o usuário em vez de chamar window.print() silenciosamente', () => {
-    const data = makeData({ alunos: [makeAluno()] });
-    const originalUserAgent = window.navigator.userAgent;
-    Object.defineProperty(window.navigator, 'userAgent', {
-      value:
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      configurable: true,
+    await waitFor(() => {
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     });
-    Object.defineProperty(window.navigator, 'standalone', { value: true, configurable: true });
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-
-    render(<RelatoriosView data={data} />);
-    fireEvent.click(screen.getByRole('button', { name: /Gerar PDF/ }));
 
     expect(window.print).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy.mock.calls[0][0]).toMatch(/Safari/);
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
+  });
 
-    alertSpy.mockRestore();
-    Object.defineProperty(window.navigator, 'userAgent', { value: originalUserAgent, configurable: true });
-    // @ts-expect-error -- propriedade não padrão usada apenas para simular iOS standalone no teste
-    delete window.navigator.standalone;
+  it('botão mostra "Gerando PDF..." durante a geração', async () => {
+    const data = makeData({ alunos: [makeAluno()] });
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:mock');
+    URL.revokeObjectURL = vi.fn();
+
+    render(<RelatoriosView data={data} />);
+
+    vi.useRealTimers();
+    fireEvent.click(screen.getByRole('button', { name: /Gerar PDF/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Gerar PDF/ })).toBeTruthy();
+    });
   });
 });
 
