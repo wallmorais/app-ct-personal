@@ -228,6 +228,30 @@ describe('RelatoriosView — ação de impressão', () => {
 
     expect(window.print).toHaveBeenCalledTimes(1);
   });
+
+  it('no iOS em modo standalone (app instalado na tela de início), avisa o usuário em vez de chamar window.print() silenciosamente', () => {
+    const data = makeData({ alunos: [makeAluno()] });
+    const originalUserAgent = window.navigator.userAgent;
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      configurable: true,
+    });
+    Object.defineProperty(window.navigator, 'standalone', { value: true, configurable: true });
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    render(<RelatoriosView data={data} />);
+    fireEvent.click(screen.getByRole('button', { name: /Gerar PDF/ }));
+
+    expect(window.print).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0][0]).toMatch(/Safari/);
+
+    alertSpy.mockRestore();
+    Object.defineProperty(window.navigator, 'userAgent', { value: originalUserAgent, configurable: true });
+    // @ts-expect-error -- propriedade não padrão usada apenas para simular iOS standalone no teste
+    delete window.navigator.standalone;
+  });
 });
 
 describe('RelatoriosView — comportamento defensivo (sem aulas)', () => {

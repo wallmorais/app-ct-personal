@@ -104,6 +104,30 @@ interface HistoricoComAluno extends HistoricoEntry {
   alunoNome: string;
 }
 
+/**
+ * No iOS, um app aberto pela tela de início (modo standalone) roda sem a UI
+ * do Safari — `window.print()` não tem onde anexar a folha de impressão e
+ * silenciosamente não faz nada (sem exceção, sem console.error). Detectamos
+ * essa condição para avisar o usuário em vez de deixar o clique "sumir".
+ */
+function isIosStandalone(): boolean {
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  if (!/iPad|iPhone|iPod/.test(nav.userAgent)) return false;
+  if (nav.standalone === true) return true;
+  return typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+}
+
+function handleGerarPDF() {
+  if (isIosStandalone()) {
+    window.alert(
+      'Não é possível gerar o PDF pelo app instalado na tela de início do iPhone/iPad.\n\n' +
+        'Abra o endereço do aplicativo pelo Safari (fora do app instalado) e toque em "Gerar PDF" novamente.',
+    );
+    return;
+  }
+  window.print();
+}
+
 /* ---------- Histórico na tela (cards) ---------- */
 
 function HistoricoRow({ entry }: { entry: HistoricoEntry }) {
@@ -429,7 +453,7 @@ export default function RelatoriosView({ data, profile }: Props) {
           <p className="text-sm text-base-muted">{formatPeriodo(range)}</p>
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={handleGerarPDF}
           className="flex items-center gap-1.5 bg-electric text-white text-sm font-semibold px-3.5 py-2 rounded-xl active:bg-electric/80 shrink-0"
         >
           <FileDown size={16} strokeWidth={2.5} />
