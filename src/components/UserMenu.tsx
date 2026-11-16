@@ -333,7 +333,7 @@ export default function UserMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-label={`Menu da conta de ${displayName}. ${statusText}`}
+        aria-label={hasProblem ? `Menu da conta de ${displayName}. ${statusText}` : `Menu da conta de ${displayName}`}
         className={
           variant === 'sidebar'
             ? 'w-full flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-base-hover/5 transition-colors'
@@ -348,12 +348,7 @@ export default function UserMenu({
         </span>
         {variant === 'sidebar' && (
           <>
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block text-sm font-medium text-base-fg truncate">{displayName}</span>
-              <span className={`block text-xs truncate ${hasProblem ? 'text-red-600 dark:text-red-400' : 'text-base-muted'}`}>
-                {statusText}
-              </span>
-            </span>
+            <span className="min-w-0 flex-1 text-left text-sm font-medium text-base-fg truncate">{displayName}</span>
             <Chevron size={16} className="text-base-muted shrink-0" aria-hidden="true" />
           </>
         )}

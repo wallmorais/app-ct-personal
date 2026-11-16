@@ -247,7 +247,8 @@ export function exportData(data: AppData): void {
 const BACKUP_FOLDER_KEY = 'pt-control:app-backups'; // equivale à pasta /app-backups
 const BACKUP_META_KEY = 'pt-control:backup-meta';
 const BACKUP_INTERVAL_DAYS = 15;
-const MAX_BACKUPS = 12; // mantém os 12 mais recentes (~6 meses)
+/** Regra de retenção: só os 3 backups mais recentes são mantidos; os mais antigos são descartados. */
+export const MAX_BACKUPS = 3;
 
 export interface BackupEntry {
   name: string; // backup_data_YYYY-MM-DD.json
@@ -268,10 +269,28 @@ export function listBackups(): BackupEntry[] {
   }
   try {
     const parsed = JSON.parse(raw) as BackupEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const kept = keepMostRecent(parsed);
+    // Aparelhos que acumularam mais que o limite (regra antiga: 12) são
+    // enxugados na primeira leitura, liberando espaço no armazenamento local.
+    if (kept.length < parsed.length) {
+      try {
+        localStorage.setItem(BACKUP_FOLDER_KEY, JSON.stringify(kept));
+      } catch {
+        /* sem acesso de escrita: a lista devolvida já respeita o limite */
+      }
+    }
+    return kept;
   } catch {
     return [];
   }
+}
+
+/** Ordena do mais recente para o mais antigo e aplica o limite de retenção. */
+function keepMostRecent(backups: BackupEntry[]): BackupEntry[] {
+  return [...backups]
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, MAX_BACKUPS);
 }
 
 function readBackupMeta(): BackupMeta {
@@ -298,7 +317,7 @@ export function createAutoBackup(data: AppData, now: Date = new Date()): BackupE
   };
 
   const backups = listBackups().filter((b) => b.name !== entry.name); // sobrescreve o do mesmo dia
-  const updated = [entry, ...backups].slice(0, MAX_BACKUPS);
+  const updated = keepMostRecent([entry, ...backups]);
   localStorage.setItem(BACKUP_FOLDER_KEY, JSON.stringify(updated));
   localStorage.setItem(BACKUP_META_KEY, JSON.stringify({ lastBackupAt: now.toISOString() }));
 

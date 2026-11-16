@@ -189,9 +189,18 @@ describe('UserMenu — ações', () => {
 });
 
 describe('UserMenu — estado de sincronização', () => {
-  it('estado normal aparece em texto no botão e no menu', () => {
+  it('estado normal não aparece no botão, só dentro do menu aberto', () => {
     renderMenu({ syncStatus: 'saved', lastSavedAt: '2026-11-16T14:32:00' });
-    expect(trigger().getAttribute('aria-label')).toContain('Tudo salvo · 14:32');
+    expect(screen.queryByText(/Tudo salvo/)).toBeNull();
+    expect(trigger().getAttribute('aria-label')).toBe('Menu da conta de Alessandra Alves');
+
+    fireEvent.click(trigger());
+    expect(screen.getByText('Tudo salvo · 14:32')).toBeTruthy();
+  });
+
+  it('com problema, o botão informa o estado ao leitor de tela', () => {
+    renderMenu({ syncStatus: 'offline' });
+    expect(trigger().getAttribute('aria-label')).toContain('Sem conexão com o servidor');
   });
 
   it('sem conexão: explica que as alterações ficam no aparelho', () => {

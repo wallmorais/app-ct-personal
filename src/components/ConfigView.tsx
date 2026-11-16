@@ -22,6 +22,7 @@ import {
   downloadBackup,
   deleteBackup,
   nextBackupDate,
+  MAX_BACKUPS,
   type BackupEntry,
 } from '../lib/storage';
 import {
@@ -958,7 +959,8 @@ export default function ConfigView({
           <h3 className="text-sm font-semibold">Backups automáticos</h3>
         </div>
         <p className="text-xs text-base-muted">
-          A cada 15 dias o app guarda automaticamente uma cópia dos seus dados. Próximo backup previsto:{' '}
+          A cada 15 dias o app guarda automaticamente uma cópia dos seus dados neste aparelho e mantém apenas os{' '}
+          {MAX_BACKUPS} backups mais recentes. Próximo backup previsto:{' '}
           <span className="font-semibold text-base-fg">{formatDate(proximoBackup)}</span>.
         </p>
 
