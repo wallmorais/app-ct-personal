@@ -1,16 +1,16 @@
-import type { Profile, ViewName } from '../types';
+import type { ReactNode } from 'react';
+import type { ViewName } from '../types';
 import { NAV_ITEMS } from '../lib/navItems';
 import { Logo } from './Logo';
-import UserMenu from './UserMenu';
 
 interface Props {
   view: ViewName;
   onChange: (view: ViewName) => void;
-  profile?: Profile | null;
-  email?: string;
+  /** Conteúdo do rodapé da barra (menu da conta). */
+  footer?: ReactNode;
 }
 
-export default function SidebarNav({ view, onChange, profile, email }: Props) {
+export default function SidebarNav({ view, onChange, footer }: Props) {
   const mainItems = NAV_ITEMS.filter((i) => i.key !== 'config');
   const configItem = NAV_ITEMS.find((i) => i.key === 'config');
 
@@ -66,11 +66,7 @@ export default function SidebarNav({ view, onChange, profile, email }: Props) {
         <div className="mt-auto" />
       </nav>
 
-      {email && (
-        <div className="border-t border-base-border p-3">
-          <UserMenu profile={profile ?? null} email={email} onNavigate={onChange} />
-        </div>
-      )}
+      {footer && <div className="border-t border-base-border p-3">{footer}</div>}
     </aside>
   );
 }

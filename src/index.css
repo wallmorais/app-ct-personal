@@ -201,3 +201,28 @@ label {
     break-inside: avoid;
   }
 }
+
+/* Menu da conta: entrada suave (popover no desktop, painel inferior no celular). */
+@keyframes user-menu-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes user-menu-sheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes user-menu-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.user-menu-pop { animation: user-menu-pop 140ms ease-out; }
+.user-menu-sheet { animation: user-menu-sheet 200ms ease-out; }
+.user-menu-backdrop { animation: user-menu-fade 200ms ease-out; }
+@media (min-width: 640px) {
+  .user-menu-sheet { animation-name: user-menu-pop; animation-duration: 140ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .user-menu-pop,
+  .user-menu-sheet,
+  .user-menu-backdrop { animation: none; }
+}

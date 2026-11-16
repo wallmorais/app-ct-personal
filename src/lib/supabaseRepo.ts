@@ -242,14 +242,19 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
   };
 }
 
+/**
+ * Grava o perfil. Para quem já tem perfil é um `update` comum, como sempre foi.
+ * Se nenhuma linha for alterada, a conta ainda não tem perfil (criada antes do
+ * gatilho de perfis, por exemplo): nesse caso a linha é criada — antes o app
+ * dizia "salvo" sem ter gravado nada.
+ */
 export async function updateProfile(profile: Profile): Promise<void> {
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      nome: profile.nome,
-      telefone: profile.telefone,
-      cidade: profile.cidade,
-    })
-    .eq('id', profile.id);
+  const fields = { nome: profile.nome, telefone: profile.telefone, cidade: profile.cidade };
+
+  const { data, error } = await supabase.from('profiles').update(fields).eq('id', profile.id).select('id');
   if (error) throw error;
+  if (data && data.length > 0) return;
+
+  const { error: insertError } = await supabase.from('profiles').insert({ id: profile.id, ...fields });
+  if (insertError) throw insertError;
 }

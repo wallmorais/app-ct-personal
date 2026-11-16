@@ -34,29 +34,36 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
-/**
- * Dispara o alerta de aulas sem check-in.
- * @param count quantidade de aulas pendentes hoje
- * @returns true se uma notificação do SO foi disparada
- */
-export function sendReminderNotification(count: number): boolean {
-  if (count <= 0) return false;
-  if (getNotificationPermission() !== 'granted') return false;
+const ICON = '/logo.png';
 
-  const titulo = 'Controle Personal — Lembrete diário';
-  const corpo =
-    count === 1
-      ? 'Você tem 1 aula de hoje sem check-in. Atualize a presença na aba Agenda.'
-      : `Você tem ${count} aulas de hoje sem check-in. Atualize a presença na aba Agenda.`;
+/**
+ * Exibe uma notificação do sistema operacional.
+ *
+ * No celular (Chrome no Android e app instalado no iOS) `new Notification()` não
+ * é permitido — o navegador exige que a notificação saia do service worker. Por
+ * isso tenta primeiro pelo service worker do PWA e só usa o construtor direto
+ * como alternativa (navegador de computador, ou dev sem service worker).
+ *
+ * @returns true se a notificação foi entregue ao sistema
+ */
+async function showSystemNotification(title: string, body: string, tag: string): Promise<boolean> {
+  if (getNotificationPermission() !== 'granted') return false;
+  const options = { body, icon: ICON, badge: ICON, tag, renotify: true } as NotificationOptions;
 
   try {
-    const notif = new Notification(titulo, {
-      body: corpo,
-      icon: '/logo.png',
-      badge: '/logo.png',
-      tag: 'pt-control-lembrete-diario', // evita empilhar várias do mesmo dia
-      renotify: true,
-    } as NotificationOptions);
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.showNotification(title, options);
+        return true;
+      }
+    }
+  } catch {
+    /* cai para o construtor direto */
+  }
+
+  try {
+    const notif = new Notification(title, options);
     notif.onclick = () => {
       window.focus();
       notif.close();
@@ -65,4 +72,31 @@ export function sendReminderNotification(count: number): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Dispara o alerta de aulas sem check-in.
+ * @param count quantidade de aulas pendentes hoje
+ * @returns true se uma notificação do SO foi disparada
+ */
+export async function sendReminderNotification(count: number): Promise<boolean> {
+  if (count <= 0) return false;
+  const corpo =
+    count === 1
+      ? 'Você tem 1 aula de hoje sem check-in. Atualize a presença na aba Agenda.'
+      : `Você tem ${count} aulas de hoje sem check-in. Atualize a presença na aba Agenda.`;
+  return showSystemNotification('Controle Personal — Lembrete diário', corpo, 'pt-control-lembrete-diario');
+}
+
+/**
+ * Dispara uma notificação de TESTE, independente de haver aulas pendentes —
+ * serve para o professor conferir se o aparelho está mostrando as notificações.
+ * @returns true se a notificação foi entregue ao sistema
+ */
+export async function sendTestNotification(): Promise<boolean> {
+  return showSystemNotification(
+    'Controle Personal — Teste de notificação',
+    'Tudo certo: é assim que o lembrete diário vai aparecer neste aparelho.',
+    'pt-control-teste',
+  );
 }

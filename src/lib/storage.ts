@@ -179,6 +179,39 @@ export function parseBackupPayload(raw: string): AppData {
   return normalizeAppData(parsed);
 }
 
+/*
+ * Marca de "alterações offline": gravada quando o usuário altera dados enquanto
+ * a leitura do servidor está falhando. Sobrevive a fechar/reabrir o app, para
+ * que a próxima leitura bem-sucedida pergunte qual versão manter em vez de
+ * descartar em silêncio o que foi feito offline. Guarda o id do usuário para
+ * não valer para outra conta no mesmo aparelho.
+ */
+const OFFLINE_EDITS_KEY = 'pt-control:offline-edits';
+
+export function markOfflineEdits(userId: string): void {
+  try {
+    localStorage.setItem(OFFLINE_EDITS_KEY, userId);
+  } catch {
+    /* sem espaço/sem acesso: a marca em memória ainda cobre a sessão atual */
+  }
+}
+
+export function hasOfflineEdits(userId: string): boolean {
+  try {
+    return localStorage.getItem(OFFLINE_EDITS_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
+export function clearOfflineEdits(): void {
+  try {
+    localStorage.removeItem(OFFLINE_EDITS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function saveData(data: AppData): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }

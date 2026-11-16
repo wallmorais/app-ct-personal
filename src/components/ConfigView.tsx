@@ -5,7 +5,7 @@ import { Bell, Download, Upload, BellRing, ShieldCheck, Archive, Trash2, HardDri
 import { supabase, isSupabaseConfigured, traduzErroAuth } from '../lib/supabase';
 import type { AppData, Profile, ProfessorVacation, MotivoAusencia, ProfessorAbsence } from '../types';
 import type { ThemePref } from '../lib/theme';
-import { updateProfile } from '../lib/supabaseRepo';
+import { fetchProfile, updateProfile } from '../lib/supabaseRepo';
 import {
   findOverlappingVacation,
   isProfessorOnVacation,
@@ -27,6 +27,7 @@ import {
 import {
   getNotificationPermission,
   requestNotificationPermission,
+  sendTestNotification,
   type NotificationPermissionState,
 } from '../lib/notifications';
 import Toast, { type ToastState } from './Toast';
@@ -394,11 +395,14 @@ function AusenciasSection({ data, setData }: { data: AppData; setData: Props['se
 }
 
 function ContaSection({ profile, onProfileChange, session }: { profile: Profile | null; onProfileChange: (p: Profile | null) => void; session: Session | null }) {
+  const userEmail = session?.user?.email ?? '';
+  const userId = session?.user?.id ?? profile?.id ?? '';
   const [editingProfile, setEditingProfile] = useState(false);
   const [nome, setNome] = useState(profile?.nome ?? '');
   const [telefone, setTelefone] = useState(profile?.telefone ?? '');
   const [cidade, setCidade] = useState(profile?.cidade ?? '');
   const [saving, setSaving] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const [changingPassword, setChangingPassword] = useState(false);
@@ -412,12 +416,61 @@ function ContaSection({ profile, onProfileChange, session }: { profile: Profile 
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutErro, setLogoutErro] = useState(false);
+
+  // Sair pede confirmação (um toque acidental não desloga) e mostra andamento.
+  async function handleLogout() {
+    setConfirmLogout(false);
+    setLoggingOut(true);
+    setLogoutErro(false);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) setLogoutErro(true);
+    } catch {
+      setLogoutErro(true);
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  function openProfileForm(base: Profile | null) {
+    setNome(base?.nome ?? '');
+    setTelefone(base?.telefone ?? '');
+    setCidade(base?.cidade ?? '');
+    setEditingProfile(true);
+  }
+
+  // "Editar" precisa funcionar mesmo que o perfil não tenha vindo na abertura do
+  // app (leitura falhou, ou a conta ainda não tem linha de perfil). Nesse caso
+  // busca de novo: se existir, usa; se não existir, abre o formulário em branco
+  // (o salvamento cria a linha); se a busca falhar, avisa em vez de não reagir.
+  async function handleEditProfile() {
+    setMsg(null);
+    if (profile) {
+      openProfileForm(profile);
+      return;
+    }
+    if (!userId) return;
+    setLoadingProfile(true);
+    try {
+      const fetched = await fetchProfile(userId);
+      if (fetched) onProfileChange(fetched);
+      openProfileForm(fetched);
+    } catch {
+      setMsg({ type: 'err', text: 'Não foi possível carregar seu perfil. Verifique a conexão e tente de novo.' });
+    } finally {
+      setLoadingProfile(false);
+    }
+  }
+
   async function handleSaveProfile() {
-    if (!profile) return;
+    if (!userId) return;
     setSaving(true);
     setMsg(null);
     try {
-      const updated = { ...profile, nome: nome.trim(), telefone: telefone.trim(), cidade: cidade.trim() };
+      const updated: Profile = { id: profile?.id ?? userId, nome: nome.trim(), telefone: telefone.trim(), cidade: cidade.trim() };
       await updateProfile(updated);
       onProfileChange(updated);
       setEditingProfile(false);
@@ -473,7 +526,6 @@ function ContaSection({ profile, onProfileChange, session }: { profile: Profile 
     }
   }
 
-  const userEmail = session?.user?.email ?? '';
   const initials = (profile?.nome || userEmail).slice(0, 2).toUpperCase();
 
   return (
@@ -490,13 +542,18 @@ function ContaSection({ profile, onProfileChange, session }: { profile: Profile 
             <p className="text-xs text-base-muted truncate">{userEmail}</p>
           </div>
           {!editingProfile && (
-            <button onClick={() => { setEditingProfile(true); setMsg(null); }} className="text-xs font-semibold text-emerald active:opacity-70 shrink-0">
+            <button
+              onClick={handleEditProfile}
+              disabled={loadingProfile}
+              className="text-xs font-semibold text-emerald active:opacity-70 shrink-0 disabled:opacity-60 flex items-center gap-1"
+            >
+              {loadingProfile && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
               Editar
             </button>
           )}
         </div>
 
-        {editingProfile && profile && (
+        {editingProfile && (
           <div className="space-y-2 pt-1">
             <div>
               <label htmlFor="profile-nome">Nome</label>
@@ -610,15 +667,31 @@ function ContaSection({ profile, onProfileChange, session }: { profile: Profile 
       </section>
 
       {/* Sair */}
-      <section className="bg-base-card border border-base-border rounded-2xl p-4">
+      <section className="bg-base-card border border-base-border rounded-2xl p-4 space-y-2">
         <button
-          onClick={() => supabase.auth.signOut()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-semibold active:bg-red-500/20"
+          onClick={() => setConfirmLogout(true)}
+          disabled={loggingOut}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-semibold active:bg-red-500/20 disabled:opacity-60"
         >
-          <LogOut size={17} />
-          Sair da conta
+          {loggingOut ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <LogOut size={17} aria-hidden="true" />}
+          {loggingOut ? 'Saindo…' : 'Sair da conta'}
         </button>
+        {logoutErro && (
+          <p role="alert" className="text-xs text-red-600 dark:text-red-400 text-center">
+            Não foi possível sair. Verifique sua conexão e tente de novo.
+          </p>
+        )}
       </section>
+
+      {confirmLogout && (
+        <ConfirmDialog
+          title="Sair da conta"
+          message="Você vai precisar entrar de novo com e-mail e senha para usar o app neste aparelho."
+          confirmLabel="Sair"
+          onCancel={() => setConfirmLogout(false)}
+          onConfirm={handleLogout}
+        />
+      )}
     </>
   );
 }
@@ -661,6 +734,38 @@ export default function ConfigView({
           'As notificações estão bloqueadas. Habilite nas configurações do navegador/site para receber o lembrete.',
       });
     }
+  }
+
+  // Testa de verdade: dispara uma notificação do sistema (independente de haver
+  // aulas pendentes) e diz ao professor o que aconteceu. O banner dentro do app
+  // também é mostrado quando há aulas pendentes hoje.
+  async function handleTestNotification() {
+    onTestNotification();
+    const current = getNotificationPermission();
+    setPermission(current);
+    if (current === 'unsupported') {
+      setToast({
+        type: 'error',
+        message: 'Este navegador não mostra notificações do sistema. O lembrete aparece só dentro do app.',
+      });
+      return;
+    }
+    if (current !== 'granted') {
+      setToast({
+        type: 'error',
+        message: 'As notificações do sistema não estão ativadas. Toque em "Ativar notificações do sistema" primeiro.',
+      });
+      return;
+    }
+    const enviada = await sendTestNotification();
+    setToast(
+      enviada
+        ? {
+            type: 'success',
+            message: 'Notificação de teste enviada. Se não apareceu, confira o modo Não Perturbe e as permissões do aparelho.',
+          }
+        : { type: 'error', message: 'O aparelho recusou a notificação. Confira as permissões do navegador para este site.' },
+    );
   }
 
   function handleManualBackup() {
@@ -806,7 +911,7 @@ export default function ConfigView({
         )}
 
         <button
-          onClick={onTestNotification}
+          onClick={handleTestNotification}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-electric text-white text-sm font-semibold active:bg-electric/80"
         >
           <BellRing size={17} />
