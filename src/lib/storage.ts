@@ -363,19 +363,38 @@ export function deleteBackup(name: string): void {
   localStorage.setItem(BACKUP_FOLDER_KEY, JSON.stringify(updated));
 }
 
-export function importData(file: File): Promise<AppData> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = parseBackupPayload(reader.result as string);
-        saveData(parsed);
-        resolve(parsed);
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsText(file);
-  });
+/** Resumo de um conjunto de dados, para o usuário conferir antes de importar. */
+export interface DataSummary {
+  alunos: number;
+  registros: number;
+  /** Data (YYYY-MM-DD) da aula mais recente registrada, se houver. */
+  ultimaAula: string | null;
+}
+
+export function summarizeData(data: AppData): DataSummary {
+  let ultimaAula: string | null = null;
+  for (const r of data.registros) {
+    if (typeof r.data === 'string' && (ultimaAula === null || r.data > ultimaAula)) ultimaAula = r.data;
+  }
+  return { alunos: data.alunos.length, registros: data.registros.length, ultimaAula };
+}
+
+/**
+ * Guarda uma cópia dos dados atuais logo antes de uma importação substituí-los,
+ * para que a troca possa ser desfeita (baixando a cópia e importando de volta).
+ *
+ * Tem nome próprio, com hora, para não sobrescrever o backup automático do dia
+ * nem uma cópia de segurança anterior, e não mexe no calendário do backup
+ * automático. Entra na mesma lista e na mesma regra de retenção.
+ */
+export function createSafetyBackup(data: AppData, now: Date = new Date()): BackupEntry {
+  const stamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+  const entry: BackupEntry = {
+    name: `antes_da_importacao_${stamp}.json`,
+    createdAt: now.toISOString(),
+    data,
+  };
+  const updated = keepMostRecent([entry, ...listBackups()]);
+  localStorage.setItem(BACKUP_FOLDER_KEY, JSON.stringify(updated));
+  return entry;
 }

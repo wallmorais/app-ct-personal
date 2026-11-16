@@ -22,8 +22,11 @@ import {
   downloadBackup,
   deleteBackup,
   nextBackupDate,
+  createSafetyBackup,
+  summarizeData,
   MAX_BACKUPS,
   type BackupEntry,
+  type DataSummary,
 } from '../lib/storage';
 import {
   getNotificationPermission,
@@ -65,6 +68,58 @@ function formatDateTime(iso: string): string {
 
 function formatDate(d: Date): string {
   return d.toLocaleDateString('pt-BR');
+}
+
+function formatISODate(iso: string | null): string {
+  return iso ? new Date(iso + 'T12:00').toLocaleDateString('pt-BR') : '—';
+}
+
+/** Comparação lado a lado entre o arquivo escolhido e os dados atuais do app. */
+function ImportSummary({ fileName, arquivo, atual }: { fileName: string; arquivo: DataSummary; atual: DataSummary }) {
+  const maisAntigo = !!atual.ultimaAula && (!arquivo.ultimaAula || arquivo.ultimaAula < atual.ultimaAula);
+  const linhas: [string, string | number, string | number][] = [
+    ['Alunos', arquivo.alunos, atual.alunos],
+    ['Aulas registradas', arquivo.registros, atual.registros],
+    ['Aula mais recente', formatISODate(arquivo.ultimaAula), formatISODate(atual.ultimaAula)],
+  ];
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-base-muted break-all">
+        Arquivo: <span className="font-semibold text-base-fg">{fileName}</span>
+      </p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-base-muted">
+            <th scope="col" className="text-left font-medium pb-1.5">
+              <span className="sr-only">Informação</span>
+            </th>
+            <th scope="col" className="text-right font-medium pb-1.5">Neste arquivo</th>
+            <th scope="col" className="text-right font-medium pb-1.5 pl-3">No app agora</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map(([rotulo, noArquivo, noApp]) => (
+            <tr key={rotulo} className="border-t border-base-border">
+              <th scope="row" className="text-left font-normal text-base-muted py-1.5">{rotulo}</th>
+              <td className="text-right font-semibold text-base-fg py-1.5">{noArquivo}</td>
+              <td className="text-right text-base-fg py-1.5 pl-3">{noApp}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {maisAntigo && (
+        <p role="alert" className="text-xs px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-200">
+          Este arquivo é mais antigo que os dados atuais.{' '}
+          {arquivo.ultimaAula
+            ? `As aulas registradas depois de ${formatISODate(arquivo.ultimaAula)} serão perdidas.`
+            : 'Ele não tem nenhuma aula registrada.'}
+        </p>
+      )}
+      <p className="text-xs text-base-muted">
+        Antes da troca, uma cópia dos dados atuais é guardada na lista de backups deste aparelho.
+      </p>
+    </div>
+  );
 }
 
 function FeriasSection({ data, setData }: { data: AppData; setData: Props['setData'] }) {
@@ -715,7 +770,7 @@ export default function ConfigView({
   const [backups, setBackups] = useState<BackupEntry[]>(() => listBackups());
   const [toast, setToast] = useState<ToastState | null>(null);
   const [backupParaExcluir, setBackupParaExcluir] = useState<string | null>(null);
-  const [pendingBackup, setPendingBackup] = useState<AppData | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<{ data: AppData; fileName: string } | null>(null);
 
   useEffect(() => {
     setBackups(listBackups());
@@ -787,7 +842,7 @@ export default function ConfigView({
     try {
       const texto = await file.text();
       const parsed = parseBackupPayload(texto);
-      setPendingBackup(parsed);
+      setPendingBackup({ data: parsed, fileName: file.name });
     } catch (err) {
       setToast({
         type: 'error',
@@ -804,9 +859,22 @@ export default function ConfigView({
 
   function handleConfirmImport() {
     if (!pendingBackup) return;
-    setData(pendingBackup);
+    // Guarda os dados atuais antes de substituir, para a troca poder ser desfeita.
+    let copiaGuardada = true;
+    try {
+      createSafetyBackup(data);
+    } catch {
+      copiaGuardada = false; // sem espaço no aparelho: a importação segue mesmo assim
+    }
+    setData(pendingBackup.data);
     setPendingBackup(null);
-    setToast({ type: 'success', message: 'Backup importado com sucesso!' });
+    setBackups(listBackups());
+    setToast({
+      type: 'success',
+      message: copiaGuardada
+        ? 'Backup importado. Os dados anteriores ficaram guardados na lista de backups.'
+        : 'Backup importado. Não foi possível guardar uma cópia dos dados anteriores.',
+    });
   }
 
   const proximoBackup = nextBackupDate();
@@ -1064,11 +1132,13 @@ export default function ConfigView({
       {pendingBackup && (
         <ConfirmDialog
           title="Importar backup?"
-          message="A importação substituirá os dados atuais do aplicativo pelos dados deste backup. Confirme somente se você deseja restaurar este arquivo."
-          confirmLabel="Importar backup"
+          message="Todos os dados atuais serão substituídos pelos deste arquivo. Confira se é o arquivo certo:"
+          confirmLabel="Substituir dados"
           onCancel={handleCancelImport}
           onConfirm={handleConfirmImport}
-        />
+        >
+          <ImportSummary fileName={pendingBackup.fileName} arquivo={summarizeData(pendingBackup.data)} atual={summarizeData(data)} />
+        </ConfirmDialog>
       )}
     </div>
   );

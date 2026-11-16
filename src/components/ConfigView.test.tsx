@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Session } from '@supabase/supabase-js';
 import ConfigView from './ConfigView';
-import { buildEmptyData } from '../lib/testFixtures';
+import { buildAluno, buildEmptyData } from '../lib/testFixtures';
+import type { AppData, Registro } from '../types';
 
 const signOut = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({ configured: true }));
@@ -35,11 +36,17 @@ const perfil = { id: 'u1', nome: 'Alessandra Alves', telefone: '', cidade: '' };
 const onProfileChange = vi.fn();
 const onTestNotification = vi.fn();
 
-function renderConfig(withSession: Session | null = session, profile: typeof perfil | null = perfil) {
+const setData = vi.fn();
+
+function renderConfig(
+  withSession: Session | null = session,
+  profile: typeof perfil | null = perfil,
+  data: AppData = buildEmptyData(),
+) {
   return render(
     <ConfigView
-      data={buildEmptyData()}
-      setData={vi.fn()}
+      data={data}
+      setData={setData}
       pendingToday={0}
       onTestNotification={onTestNotification}
       themePref="system"
@@ -196,5 +203,96 @@ describe('ConfigView — Editar perfil', () => {
 
     await screen.findByText(/Não foi possível carregar seu perfil/);
     expect(screen.queryByLabelText('Nome', { selector: '#profile-nome' })).toBeNull();
+  });
+});
+
+describe('ConfigView — Importar backup', () => {
+  const aula = (data: string): Registro => ({
+    id: `r-${data}`,
+    alunoId: 'a1',
+    slotId: 's1',
+    data,
+    horario: '07:00',
+    status: 'presente',
+  });
+
+  function escolherArquivo(conteudo: string, nome = 'pt-control-backup-2026-08-01.json') {
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([conteudo], nome, { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+  }
+
+  const atual = () =>
+    buildEmptyData({
+      alunos: [buildAluno(), buildAluno(), buildAluno()],
+      registros: [aula('2026-11-10'), aula('2026-11-16')],
+    });
+  const antigo = () => buildEmptyData({ alunos: [buildAluno()], registros: [aula('2026-08-01')] });
+
+  it('mostra o resumo do arquivo ao lado dos dados atuais e não importa antes de confirmar', async () => {
+    renderConfig(session, perfil, atual());
+    escolherArquivo(JSON.stringify(antigo()));
+
+    await screen.findByText('Importar backup?');
+    expect(screen.getByText('pt-control-backup-2026-08-01.json')).toBeTruthy();
+    const linha = (rotulo: string) =>
+      Array.from(screen.getByText(rotulo).closest('tr')!.querySelectorAll('td')).map((td) => td.textContent);
+    expect(linha('Alunos')).toEqual(['1', '3']);
+    expect(linha('Aulas registradas')).toEqual(['1', '2']);
+    expect(linha('Aula mais recente')).toEqual(['01/08/2026', '16/11/2026']);
+    expect(setData).not.toHaveBeenCalled();
+  });
+
+  it('arquivo mais antigo que os dados atuais: avisa quais aulas serão perdidas', async () => {
+    renderConfig(session, perfil, atual());
+    escolherArquivo(JSON.stringify(antigo()));
+
+    const aviso = await screen.findByText(/mais antigo que os dados atuais/);
+    expect(aviso.textContent).toContain('depois de 01/08/2026 serão perdidas');
+  });
+
+  it('arquivo igual ou mais novo: sem aviso de arquivo antigo', async () => {
+    renderConfig(session, perfil, antigo());
+    escolherArquivo(JSON.stringify(atual()));
+
+    await screen.findByText('Importar backup?');
+    expect(screen.queryByText(/mais antigo que os dados atuais/)).toBeNull();
+  });
+
+  it('Cancelar não altera nada', async () => {
+    renderConfig(session, perfil, atual());
+    escolherArquivo(JSON.stringify(antigo()));
+    await screen.findByText('Importar backup?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(setData).not.toHaveBeenCalled();
+    expect(localStorage.getItem('pt-control:app-backups')).not.toContain('antes_da_importacao');
+  });
+
+  it('confirmar: guarda cópia dos dados atuais e só então substitui', async () => {
+    const dadosAtuais = atual();
+    renderConfig(session, perfil, dadosAtuais);
+    escolherArquivo(JSON.stringify(antigo()));
+    await screen.findByText('Importar backup?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Substituir dados' }));
+
+    expect(setData).toHaveBeenCalledTimes(1);
+    expect((setData.mock.calls[0][0] as AppData).registros.map((r) => r.data)).toEqual(['2026-08-01']);
+
+    const backups = JSON.parse(localStorage.getItem('pt-control:app-backups')!);
+    expect(backups[0].name).toMatch(/^antes_da_importacao_/);
+    expect(backups[0].data.registros).toHaveLength(2);
+    await screen.findByText(/dados anteriores ficaram guardados/);
+  });
+
+  it('arquivo inválido: mostra erro e não abre a confirmação', async () => {
+    renderConfig(session, perfil, atual());
+    escolherArquivo('{"alunos": "não é lista"}');
+
+    await screen.findByText(/Não foi possível importar o arquivo/);
+    expect(screen.queryByText('Importar backup?')).toBeNull();
+    expect(setData).not.toHaveBeenCalled();
   });
 });

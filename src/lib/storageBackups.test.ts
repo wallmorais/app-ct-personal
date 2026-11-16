@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createAutoBackup, listBackups, MAX_BACKUPS, runScheduledBackup } from './storage';
+import {
+  createAutoBackup,
+  createSafetyBackup,
+  listBackups,
+  MAX_BACKUPS,
+  nextBackupDate,
+  runScheduledBackup,
+  summarizeData,
+} from './storage';
 import { buildEmptyData } from './testFixtures';
 
 const FOLDER_KEY = 'pt-control:app-backups';
@@ -72,5 +80,58 @@ describe('backups automáticos — regra de retenção', () => {
     expect(runScheduledBackup(buildEmptyData(), dia('11-10'))).toBeNull();
     expect(runScheduledBackup(buildEmptyData(), dia('11-16'))).not.toBeNull();
     expect(nomes()).toHaveLength(2);
+  });
+});
+
+describe('cópia de segurança antes de importar', () => {
+  it('tem nome próprio com hora e não substitui o backup automático do mesmo dia', () => {
+    createAutoBackup(buildEmptyData(), dia('11-16'));
+    createSafetyBackup(buildEmptyData(), new Date('2026-11-16T15:30:05Z'));
+
+    expect(nomes()).toEqual(['antes_da_importacao_2026-11-16_15-30-05.json', 'backup_data_2026-11-16.json']);
+  });
+
+  it('duas importações no mesmo dia geram duas cópias distintas', () => {
+    createSafetyBackup(buildEmptyData(), new Date('2026-11-16T15:30:05Z'));
+    createSafetyBackup(buildEmptyData(), new Date('2026-11-16T15:31:00Z'));
+    expect(nomes()).toHaveLength(2);
+  });
+
+  it('não altera a data do próximo backup automático', () => {
+    createAutoBackup(buildEmptyData(), dia('11-01'));
+    const antes = nextBackupDate().toISOString();
+    createSafetyBackup(buildEmptyData(), dia('11-16'));
+    expect(nextBackupDate().toISOString()).toBe(antes);
+  });
+
+  it('entra na mesma regra de retenção (3 mais recentes)', () => {
+    gravarBackups(['11-10', '09-20', '08-26']);
+    createSafetyBackup(buildEmptyData(), dia('11-16'));
+    expect(nomes()).toEqual([
+      'antes_da_importacao_2026-11-16_12-00-00.json',
+      'backup_data_2026-11-10.json',
+      'backup_data_2026-09-20.json',
+    ]);
+  });
+});
+
+describe('summarizeData', () => {
+  it('conta alunos e aulas e acha a aula mais recente', () => {
+    const data = buildEmptyData({
+      alunos: [{ id: 'a', nome: 'A', telefone: '', plano: 8, valorAula: 1, observacoes: '' }],
+      registros: ['2026-03-01', '2026-11-16', '2026-07-09'].map((d) => ({
+        id: d,
+        alunoId: 'a',
+        slotId: 's',
+        data: d,
+        horario: '07:00',
+        status: 'presente' as const,
+      })),
+    });
+    expect(summarizeData(data)).toEqual({ alunos: 1, registros: 3, ultimaAula: '2026-11-16' });
+  });
+
+  it('sem aulas: aula mais recente é nula', () => {
+    expect(summarizeData(buildEmptyData())).toEqual({ alunos: 0, registros: 0, ultimaAula: null });
   });
 });

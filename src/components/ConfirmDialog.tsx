@@ -1,14 +1,17 @@
+import type { ReactNode } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface Props {
   title: string;
   message: string;
   confirmLabel?: string;
+  /** Conteúdo extra abaixo da mensagem (ex.: resumo do que será alterado). */
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export default function ConfirmDialog({ title, message, confirmLabel = 'Excluir', onConfirm, onCancel }: Props) {
+export default function ConfirmDialog({ title, message, confirmLabel = 'Excluir', children, onConfirm, onCancel }: Props) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-5">
       <div className="w-full max-w-sm bg-base-card border border-base-border rounded-2xl p-5 space-y-4">
@@ -22,6 +25,7 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Excluir'
           </button>
         </div>
         <p className="text-sm text-base-muted">{message}</p>
+        {children}
         <div className="flex gap-3">
           <button
             onClick={onCancel}
