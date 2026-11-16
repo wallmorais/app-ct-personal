@@ -28,34 +28,91 @@ export function isRemoteEmpty(counts: RemoteCollectionCounts): boolean {
   );
 }
 
+/** Tamanho de cada página pedida ao Supabase (igual ao teto padrão do PostgREST). */
+export const PAGE_SIZE = 1000;
+
+export interface PageResult<T> {
+  data: T[] | null;
+  error: unknown;
+  count: number | null;
+}
+
+/**
+ * Lê TODAS as linhas de uma consulta, página a página.
+ *
+ * O PostgREST devolve no máximo `max_rows` linhas por requisição (1000 por
+ * padrão) e trunca o resto em silêncio. Como `persist_app_data` apaga e
+ * reinsere tudo, um carregamento truncado seria gravado de volta e apagaria o
+ * excedente de forma definitiva — por isso a leitura nunca pode ser parcial.
+ *
+ * O critério de parada é o total exato informado pelo servidor (`count`), e não
+ * o tamanho da página: assim funciona mesmo que o teto do servidor seja menor
+ * que `pageSize`. Se, ao final, vierem menos linhas que o total, lança erro em
+ * vez de devolver dados incompletos.
+ */
+export async function fetchAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  pageSize: number = PAGE_SIZE,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let total: number | null = null;
+
+  for (;;) {
+    const { data, error, count } = await fetchPage(rows.length, rows.length + pageSize - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (count != null) total = count;
+
+    if (page.length === 0) break;
+    if (total != null ? rows.length >= total : page.length < pageSize) break;
+  }
+
+  if (total != null && rows.length < total) {
+    throw new Error(`Leitura incompleta do Supabase: ${rows.length} de ${total} linhas.`);
+  }
+  return rows;
+}
+
+/** Todas as linhas do usuário em uma tabela, em ordem estável (por id) para paginar. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fetchAllRows(table: string, userId: string): Promise<any[]> {
+  return fetchAllPages((from, to) =>
+    supabase
+      .from(table)
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+}
+
 /** Retorna null se o Supabase estiver vazio para este usuário (primeiro acesso). */
 export async function fetchAppData(userId: string): Promise<AppData | null> {
-  const [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, ausenciasRes, configRes] =
+  const [alunosRows, slotsRows, schedulesRows, registrosRows, pagamentosRows, feriasRows, matriculasRows, ausenciasRows, configRes] =
     await Promise.all([
-      supabase.from('alunos').select('*').eq('user_id', userId),
-      supabase.from('aula_slots').select('*').eq('user_id', userId),
-      supabase.from('student_schedules').select('*').eq('user_id', userId),
-      supabase.from('registros').select('*').eq('user_id', userId),
-      supabase.from('pagamentos').select('*').eq('user_id', userId),
-      supabase.from('ferias_professor').select('*').eq('user_id', userId),
-      supabase.from('matriculas').select('*').eq('user_id', userId),
-      supabase.from('ausencias_professor').select('*').eq('user_id', userId),
+      fetchAllRows('alunos', userId),
+      fetchAllRows('aula_slots', userId),
+      fetchAllRows('student_schedules', userId),
+      fetchAllRows('registros', userId),
+      fetchAllRows('pagamentos', userId),
+      fetchAllRows('ferias_professor', userId),
+      fetchAllRows('matriculas', userId),
+      fetchAllRows('ausencias_professor', userId),
       supabase.from('config').select('*').eq('user_id', userId).maybeSingle(),
     ]);
 
-  for (const res of [alunosRes, slotsRes, schedulesRes, registrosRes, pagamentosRes, feriasRes, matriculasRes, ausenciasRes, configRes]) {
-    if (res.error) throw res.error;
-  }
+  if (configRes.error) throw configRes.error;
 
   const isEmpty = isRemoteEmpty({
-    alunos: alunosRes.data?.length ?? 0,
-    slots: slotsRes.data?.length ?? 0,
-    schedules: schedulesRes.data?.length ?? 0,
-    registros: registrosRes.data?.length ?? 0,
-    pagamentos: pagamentosRes.data?.length ?? 0,
-    ferias: feriasRes.data?.length ?? 0,
-    matriculas: matriculasRes.data?.length ?? 0,
-    ausencias: ausenciasRes.data?.length ?? 0,
+    alunos: alunosRows.length,
+    slots: slotsRows.length,
+    schedules: schedulesRows.length,
+    registros: registrosRows.length,
+    pagamentos: pagamentosRows.length,
+    ferias: feriasRows.length,
+    matriculas: matriculasRows.length,
+    ausencias: ausenciasRows.length,
     hasConfig: !!configRes.data,
   });
 
@@ -65,15 +122,15 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
   }
 
   console.info('[PT.Control] 📥 Dados carregados do Supabase:', {
-    alunos: alunosRes.data?.length ?? 0,
-    registros: registrosRes.data?.length ?? 0,
-    slots: slotsRes.data?.length ?? 0,
+    alunos: alunosRows.length,
+    registros: registrosRows.length,
+    slots: slotsRows.length,
   });
 
   const cfg = configRes.data;
 
   return {
-    alunos: (alunosRes.data ?? []).map((a) => ({
+    alunos: alunosRows.map((a) => ({
       id: a.id,
       nome: a.nome,
       telefone: a.telefone,
@@ -87,18 +144,18 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       dataEncerramento: a.data_encerramento ?? undefined,
       diaCobranca: a.dia_cobranca ?? undefined,
     })),
-    slots: (slotsRes.data ?? []).map((s) => ({
+    slots: slotsRows.map((s) => ({
       id: s.id,
       horario: s.horario,
       horarioFim: s.horario_fim ?? undefined,
     })),
-    schedules: (schedulesRes.data ?? []).map((s) => ({
+    schedules: schedulesRows.map((s) => ({
       id: s.id,
       alunoId: s.aluno_id,
       slotId: s.slot_id,
       dias: s.dias ?? [],
     })),
-    registros: (registrosRes.data ?? []).map((r) => ({
+    registros: registrosRows.map((r) => ({
       id: r.id,
       alunoId: r.aluno_id,
       slotId: r.slot_id,
@@ -114,21 +171,21 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       faltaTipo: r.falta_tipo ?? undefined,
       faltaProfessor: r.falta_professor ?? undefined,
     })),
-    pagamentos: (pagamentosRes.data ?? []).map((p) => ({
+    pagamentos: pagamentosRows.map((p) => ({
       alunoId: p.aluno_id,
       mes: p.mes,
       status: p.status,
       dataPagamento: p.data_pagamento ?? undefined,
       valor: Number(p.valor),
     })),
-    feriasProfessor: (feriasRes.data ?? []).map((f) => ({
+    feriasProfessor: feriasRows.map((f) => ({
       id: f.id,
       dataInicio: f.data_inicio,
       dataFim: f.data_fim,
       observacao: f.observacao ?? undefined,
       createdAt: f.created_at,
     })),
-    matriculas: (matriculasRes.data ?? []).map((m) => ({
+    matriculas: matriculasRows.map((m) => ({
       id: m.id,
       alunoId: m.aluno_id,
       dataInicio: m.data_inicio,
@@ -137,7 +194,7 @@ export async function fetchAppData(userId: string): Promise<AppData | null> {
       observacao: m.observacao ?? undefined,
       createdAt: m.created_at,
     })),
-    ausenciasProfessor: (ausenciasRes.data ?? []).map((a) => ({
+    ausenciasProfessor: ausenciasRows.map((a) => ({
       id: a.id,
       data: a.data,
       motivo: a.motivo,
